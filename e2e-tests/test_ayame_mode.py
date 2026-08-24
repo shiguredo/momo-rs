@@ -1,0 +1,374 @@
+"""Ayame モードの E2E テスト"""
+
+import uuid
+from typing import Any, cast
+
+import pytest
+from momo import Momo, MomoCodecParams, MomoMode, find_stats
+
+AYAME_SIGNALING_URL = "wss://ayame-labo.shiguredo.app/signaling"
+
+
+def test_ayame_mode_basic(free_port, port_allocator):
+    """Ayame モードで momo を起動できることを確認"""
+    room_id = str(uuid.uuid4())
+
+    with Momo(
+        mode=MomoMode.AYAME,
+        ayame_signaling_url=AYAME_SIGNALING_URL,
+        room_id=room_id,
+        metrics_port=free_port,
+        fake_capture_device=True,
+        resolution="QVGA",
+        framerate=30,
+        log_level="info",
+    ) as m:
+        data = m.get_metrics()
+        assert "version" in data
+
+
+def test_ayame_mode_with_client_id(free_port, port_allocator):
+    """Ayame モードで client_id を指定して起動できることを確認"""
+    room_id = str(uuid.uuid4())
+    client_id = str(uuid.uuid4())
+
+    with Momo(
+        mode=MomoMode.AYAME,
+        ayame_signaling_url=AYAME_SIGNALING_URL,
+        room_id=room_id,
+        client_id=client_id,
+        metrics_port=free_port,
+        fake_capture_device=True,
+        resolution="QVGA",
+        framerate=15,
+    ) as m:
+        data = m.get_metrics()
+        assert "version" in data  # メトリクスが取得できることを確認
+
+
+def test_ayame_mode_with_video_settings(free_port, port_allocator):
+    """Ayame モードでビデオ設定をカスタマイズして起動できることを確認"""
+    room_id = str(uuid.uuid4())
+
+    with Momo(
+        mode=MomoMode.AYAME,
+        ayame_signaling_url=AYAME_SIGNALING_URL,
+        room_id=room_id,
+        metrics_port=free_port,
+        fake_capture_device=True,
+        resolution="QVGA",
+        framerate=15,
+        vp8_encoder="software",
+    ) as m:
+        data = m.get_metrics()
+        assert "version" in data  # メトリクスが取得できることを確認
+
+
+@pytest.mark.parametrize("codec", ["VP8", "VP9", "AV1"])
+def test_ayame_mode_with_codec(port_allocator, codec):
+    """Ayame モードで各種コーデックを使用した通信を確認"""
+    room_id = str(uuid.uuid4())
+
+    # コーデックごとのエンコーダー/デコーダー設定
+    codec_settings: MomoCodecParams = {}
+    match codec:
+        case "VP8":
+            codec_settings = {
+                "vp8_encoder": "software",
+                "vp8_decoder": "software",
+            }
+        case "VP9":
+            codec_settings = {
+                "vp9_encoder": "software",
+                "vp9_decoder": "software",
+            }
+        case "AV1":
+            codec_settings = {
+                "av1_encoder": "software",
+                "av1_decoder": "software",
+            }
+
+    with (
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            resolution="QVGA",
+            ayame_video_codec_type=codec,  # コーデックを指定
+            **codec_settings,
+        ) as m1,
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            resolution="QVGA",
+            ayame_video_codec_type=codec,  # コーデックを指定
+            **codec_settings,
+        ) as m2,
+    ):
+        # 両方のピアの接続が確立されるまで待機
+        assert m1.wait_for_connection(timeout=10), (
+            f"M1 failed to establish connection for {codec} codec within timeout"
+        )
+        assert m2.wait_for_connection(timeout=10), (
+            f"M2 failed to establish connection for {codec} codec within timeout"
+        )
+
+        p1_data = m1.get_metrics()
+        p2_data = m2.get_metrics()
+
+        # p1 の outbound-rtp でコーデックを確認
+        p1_outbound = find_stats(p1_data, type="outbound-rtp", kind="video")
+        assert p1_outbound is not None, "Could not find p1 outbound-rtp video stream"
+
+        codec_id = p1_outbound.get("codecId")
+        assert codec_id is not None, "No codecId found in p1 outbound-rtp stats"
+
+        # codecId から codec 統計を探す
+        p1_codec = find_stats(p1_data, id=codec_id, type="codec")
+        assert p1_codec is not None, f"Could not find codec stats for codecId: {codec_id}"
+
+        mime_type = p1_codec.get("mimeType", "")
+        # mimeType から "video/" や "audio/" を除去してコーデック名だけを取得
+        codec_name = mime_type.split("/")[-1] if "/" in mime_type else mime_type
+        assert codec == codec_name.upper(), f"Expected {codec} codec but got: {mime_type}"
+        print(f"P1 codec for {codec}: {mime_type}")
+
+        # p2 の outbound-rtp でもコーデックを確認（双方向通信なので）
+        p2_outbound = find_stats(p2_data, type="outbound-rtp", kind="video")
+        assert p2_outbound is not None, "Could not find p2 outbound-rtp video stream"
+
+        codec_id = p2_outbound.get("codecId")
+        assert codec_id is not None, "No codecId found in p2 outbound-rtp stats"
+
+        # codecId から codec 統計を探す
+        p2_codec = find_stats(p2_data, id=codec_id, type="codec")
+        assert p2_codec is not None, f"Could not find codec stats for codecId: {codec_id}"
+
+        mime_type = p2_codec.get("mimeType", "")
+        # mimeType から "video/" や "audio/" を除去してコーデック名だけを取得
+        codec_name = mime_type.split("/")[-1] if "/" in mime_type else mime_type
+        assert codec == codec_name.upper(), f"Expected {codec} codec but got: {mime_type}"
+        print(f"P2 codec for {codec}: {mime_type}")
+
+
+def test_ayame_mode_with_audio_settings(free_port, port_allocator):
+    """Ayame モードでオーディオ設定をカスタマイズして起動できることを確認"""
+    room_id = str(uuid.uuid4())
+
+    with Momo(
+        mode=MomoMode.AYAME,
+        ayame_signaling_url=AYAME_SIGNALING_URL,
+        room_id=room_id,
+        metrics_port=free_port,
+        fake_capture_device=True,
+        disable_echo_cancellation=True,
+        disable_auto_gain_control=True,
+        disable_noise_suppression=True,
+    ) as m:
+        data = m.get_metrics()
+        assert "version" in data  # メトリクスが取得できることを確認
+
+
+def test_ayame_mode_peer_connection(port_allocator):
+    """Ayame モードで2つのピアが双方向通信できることを確認"""
+    room_id = str(uuid.uuid4())
+
+    with (
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            resolution="QVGA",
+            initial_wait=10,
+        ) as m1,
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            resolution="QVGA",
+            initial_wait=10,
+        ) as m2,
+    ):
+        # 両方のピアの接続が確立されるまで待機
+        assert m1.wait_for_connection(timeout=10), (
+            "M1 failed to establish connection within timeout"
+        )
+        assert m2.wait_for_connection(timeout=10), (
+            "M2 failed to establish connection within timeout"
+        )
+
+        p1_data = m1.get_metrics()
+        p2_data = m2.get_metrics()
+
+        # p1 の送受信を確認（送信と受信の両方があるはず）
+        p1_video_out = find_stats(p1_data, type="outbound-rtp", kind="video")
+        assert p1_video_out is not None, "P1 should have video outbound-rtp"
+        p1_video_in = find_stats(p1_data, type="inbound-rtp", kind="video")
+        assert p1_video_in is not None, "P1 should have video inbound-rtp"
+        assert p1_video_out.get("packetsSent", 0) > 0
+        assert p1_video_in.get("packetsReceived", 0) > 0
+
+        # p2 の送受信を確認（送信と受信の両方があるはず）
+        p2_video_out = find_stats(p2_data, type="outbound-rtp", kind="video")
+        assert p2_video_out is not None, "P2 should have video outbound-rtp"
+        p2_video_in = find_stats(p2_data, type="inbound-rtp", kind="video")
+        assert p2_video_in is not None, "P2 should have video inbound-rtp"
+        assert p2_video_out.get("packetsSent", 0) > 0
+        assert p2_video_in.get("packetsReceived", 0) > 0
+
+        print(
+            f"P1 video - sent: {p1_video_out.get('packetsSent')}, received: {p1_video_in.get('packetsReceived')}"
+        )
+        print(
+            f"P2 video - sent: {p2_video_out.get('packetsSent')}, received: {p2_video_in.get('packetsReceived')}"
+        )
+
+
+def test_ayame_mode_direction_sendonly_recvonly(port_allocator):
+    """Ayame モードで direction を使って sendonly と recvonly のペアが通信できることを確認"""
+    room_id = str(uuid.uuid4())
+
+    # sendonly 側
+    with (
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            direction="sendonly",
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            resolution="QVGA",
+        ) as sender,
+        Momo(
+            # recvonly 側
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            direction="recvonly",
+            metrics_port=next(port_allocator),
+            resolution="QVGA",
+        ) as receiver,
+    ):
+        # 両方のピアの接続が確立されるまで待機
+        assert sender.wait_for_connection(timeout=10), (
+            "Sender failed to establish connection within timeout"
+        )
+        assert receiver.wait_for_connection(timeout=10), (
+            "Receiver failed to establish connection within timeout"
+        )
+
+        sender_data = sender.get_metrics()
+        receiver_data = receiver.get_metrics()
+
+        # sendonly は送信のみ（outbound-rtp はあるが inbound-rtp はない）
+        sender_video_out = find_stats(sender_data, type="outbound-rtp", kind="video")
+        assert sender_video_out is not None, "Sender should have video outbound-rtp"
+        assert sender_video_out.get("packetsSent", 0) > 0
+
+        # sendonly は受信しない
+        assert find_stats(sender_data, type="inbound-rtp", kind="video") is None, (
+            "Sender should NOT have video inbound-rtp"
+        )
+
+        # recvonly は受信のみ（inbound-rtp はあるが outbound-rtp はない）
+        receiver_video_in = find_stats(receiver_data, type="inbound-rtp", kind="video")
+        assert receiver_video_in is not None, "Receiver should have video inbound-rtp"
+        assert receiver_video_in.get("packetsReceived", 0) > 0
+
+        # recvonly は送信しない
+        assert find_stats(receiver_data, type="outbound-rtp", kind="video") is None, (
+            "Receiver should NOT have video outbound-rtp"
+        )
+
+        print(f"Sender video - sent: {sender_video_out.get('packetsSent')}")
+        print(f"Receiver video - received: {receiver_video_in.get('packetsReceived')}")
+
+
+def test_ayame_mode_direction_sendrecv_default(free_port):
+    """Ayame モードで direction のデフォルトが sendrecv として動作することを確認"""
+    room_id = str(uuid.uuid4())
+
+    # direction を指定しない（デフォルト = sendrecv）
+    with (
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            metrics_port=free_port,
+            fake_capture_device=True,
+            resolution="QVGA",
+        ) as m,
+        Momo(
+            # 明示的に sendrecv を指定
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            client_id=str(uuid.uuid4()),
+            direction="sendrecv",
+            metrics_port=free_port + 1,
+            fake_capture_device=True,
+            resolution="QVGA",
+        ) as m2,
+    ):
+        # 両方のピアの接続が確立されるまで待機
+        assert m.wait_for_connection(timeout=10), "M1 failed to establish connection within timeout"
+        assert m2.wait_for_connection(timeout=10), (
+            "M2 failed to establish connection within timeout"
+        )
+
+        m1_data = m.get_metrics()
+        m2_data = m2.get_metrics()
+
+        # 両方とも送受信できるはず
+        assert find_stats(m1_data, type="outbound-rtp", kind="video") is not None
+        assert find_stats(m1_data, type="inbound-rtp", kind="video") is not None
+        assert find_stats(m2_data, type="outbound-rtp", kind="video") is not None
+        assert find_stats(m2_data, type="inbound-rtp", kind="video") is not None
+
+
+def test_ayame_mode_with_invalid_codec(port_allocator):
+    """存在しないコーデックを指定した場合にエラーで終了することを確認"""
+    room_id = str(uuid.uuid4())
+
+    # 存在しないビデオコーデックを指定
+    with (
+        pytest.raises(RuntimeError, match="momo process exited unexpectedly"),
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            ayame_video_codec_type=cast(Any, "INVALID_CODEC"),  # 存在しないコーデック
+        ),
+    ):
+        pytest.fail("momo process should have exited with invalid codec")
+
+    # 存在しないオーディオコーデックを指定
+    with (
+        pytest.raises(RuntimeError, match="momo process exited unexpectedly"),
+        Momo(
+            mode=MomoMode.AYAME,
+            ayame_signaling_url=AYAME_SIGNALING_URL,
+            room_id=room_id,
+            metrics_port=next(port_allocator),
+            fake_capture_device=True,
+            ayame_audio_codec_type=cast(Any, "INVALID_AUDIO"),  # 存在しないコーデック
+        ),
+    ):
+        pytest.fail("momo process should have exited with invalid audio codec")

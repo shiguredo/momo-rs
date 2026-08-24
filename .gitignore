@@ -1,0 +1,21 @@
+target/
+.cargo/
+
+# Python
+__pycache__/
+*.pyc
+
+# Agents
+.claude/
+.codex/
+.cursor/
+
+# macOS
+.DS_Store
+
+# openh264
+libopenh264*
+
+# Python (uv)
+.venv/
+uv.lock

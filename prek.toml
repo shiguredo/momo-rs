@@ -1,0 +1,79 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+minimum_prek_version = "0.3.9"
+
+# ─── builtin: 基本チェック ────────────────────────────────────────
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "mixed-line-ending" },
+  { id = "fix-byte-order-marker" },
+  { id = "check-merge-conflict" },
+  { id = "check-case-conflict" },
+  { id = "check-symlinks" },
+  { id = "destroyed-symlinks" },
+  { id = "check-added-large-files" },
+  { id = "check-shebang-scripts-are-executable" },
+  { id = "check-executables-have-shebangs" },
+  { id = "detect-private-key" },
+  { id = "check-toml" },
+  { id = "check-yaml" },
+]
+
+# ─── builtin: JSON チェック (devcontainer.json は JSONC のため除外) ──
+[[repos]]
+repo = "builtin"
+
+[[repos.hooks]]
+id = "check-json"
+exclude = { glob = [".devcontainer/devcontainer.json"] }
+
+# ─── local: cargo ────────────────────────────────────────────────
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "cargo fmt"
+entry = "cargo fmt --all -- --check"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+priority = 0
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "cargo clippy"
+entry = "cargo clippy --workspace -- -D warnings"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+priority = 10
+
+# ─── remote: ruff (e2e-tests のみを対象にする) ────────────────────
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.16.6"
+
+[[repos.hooks]]
+id = "ruff-format"
+files = { glob = "e2e-tests/**/*.py" }
+priority = 0
+
+[[repos.hooks]]
+id = "ruff-check"
+files = { glob = "e2e-tests/**/*.py" }
+priority = 10
+
+# ─── remote: ty (設定は pyproject.toml の [tool.ty] を参照する) ───
+[[repos]]
+repo = "https://github.com/astral-sh/ty-pre-commit"
+rev = "v0.0.79"
+
+[[repos.hooks]]
+id = "ty"
+priority = 10
