@@ -1,0 +1,17 @@
+target/
+.cargo/
+
+# Agents
+.claude/
+.codex/
+.cursor/
+
+# macOS
+.DS_Store
+
+# openh264
+libopenh264*
+
+# Python (uv)
+.venv/
+uv.lock

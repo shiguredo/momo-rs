@@ -1,0 +1,82 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+minimum_prek_version = "0.3.9"
+
+# ─── builtin: 基本チェック ────────────────────────────────────────
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "mixed-line-ending" },
+  { id = "fix-byte-order-marker" },
+  { id = "check-merge-conflict" },
+  { id = "check-case-conflict" },
+  { id = "check-symlinks" },
+  { id = "destroyed-symlinks" },
+  { id = "check-added-large-files" },
+  { id = "check-shebang-scripts-are-executable" },
+  { id = "check-executables-have-shebangs" },
+  { id = "detect-private-key" },
+  { id = "check-toml" },
+  { id = "check-yaml" },
+]
+
+# ─── builtin: JSON チェック (devcontainer.json は JSONC のため除外) ──
+[[repos]]
+repo = "builtin"
+
+[[repos.hooks]]
+id = "check-json"
+exclude = { glob = [".devcontainer/devcontainer.json"] }
+
+# ─── local: cargo / e2e-tests ─────────────────────────────────────
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "cargo fmt"
+entry = "cargo fmt --all -- --check"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+priority = 0
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format"
+entry = "uv run ruff format --check e2e-tests"
+language = "system"
+files = { glob = "e2e-tests/**/*.py" }
+pass_filenames = false
+priority = 0
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "cargo clippy"
+entry = "cargo clippy --workspace --features ayame,sora,player -- -D warnings"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+priority = 10
+
+[[repos.hooks]]
+id = "ruff-check"
+name = "ruff check"
+entry = "uv run ruff check e2e-tests"
+language = "system"
+files = { glob = "e2e-tests/**/*.py" }
+pass_filenames = false
+priority = 10
+
+[[repos.hooks]]
+id = "ty-check"
+name = "ty check"
+entry = "uv run ty check e2e-tests"
+language = "system"
+files = { glob = "e2e-tests/**/*.py" }
+pass_filenames = false
+priority = 10
