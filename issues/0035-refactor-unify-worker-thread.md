@@ -1,7 +1,7 @@
 # Ayame / P2P の worker thread を network thread に統一する
 
 - Created: 2026-09-15
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-15
 - Branch: feature/refactor-unify-worker-thread
 - Polished: {YYYY-MM-DD}
 
@@ -27,9 +27,15 @@ Ayame モードと P2P モードの WebRTC factory のために専用の worker 
 
 ## 解決方法
 
-- `AyameEngine::new` と `WebRtcEngine::new` から worker thread の生成と `start` を削除する
-- 両方の `deps.set_worker_thread(&worker_thread)` を `deps.set_worker_thread(&network_thread)` に変更する
-- `AyameEngine` と `WebRtcEngine` から `_worker_thread` フィールドと、`Ok(Self { .. })` の `_worker_thread: worker_thread` を削除する
+Ayame / P2P の worker thread として network thread を使うようにした。
+
+- `src/ayame/webrtc.rs` の `AyameEngine` と `src/p2p/webrtc.rs` の `WebRtcEngine` から `_worker_thread` フィールドと worker 用の `Thread::new()` / `start()` を削除し、`set_worker_thread` に network thread を渡すようにした
+- drop 順のコメントを実態に合わせて更新した
+- `CHANGES.md` の `## develop` に追記した
+
+確認:
+
+- `cargo check --workspace` / `cargo clippy --workspace` / `cargo test --workspace` が通ることを確認した（13 件）
 
 ## 完了条件
 
