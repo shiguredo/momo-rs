@@ -47,7 +47,6 @@ pub(super) struct WebRtcEngine {
     // 4. スレッド群（factory より後に drop）
     _env: Environment,
     _network_thread: Thread,
-    _worker_thread: Thread,
     _signaling_thread: Thread,
 }
 
@@ -55,10 +54,8 @@ impl WebRtcEngine {
     pub(super) fn new(config: &P2PConfig) -> Result<Self, BoxError> {
         let env = Environment::new();
         let mut network_thread = Thread::new_with_socket_server();
-        let mut worker_thread = Thread::new();
         let mut signaling_thread = Thread::new();
         network_thread.start();
-        worker_thread.start();
         signaling_thread.start();
 
         // ── 映像デバイス ──────────────────────────────────────────────────
@@ -215,7 +212,8 @@ impl WebRtcEngine {
         // ── PeerConnectionFactory ─────────────────────────────────────────
         let mut deps = PeerConnectionFactoryDependencies::new();
         deps.set_network_thread(&network_thread);
-        deps.set_worker_thread(&worker_thread);
+        // worker thread には network thread を使う
+        deps.set_worker_thread(&network_thread);
         deps.set_signaling_thread(&signaling_thread);
         deps.set_audio_encoder_factory(&AudioEncoderFactory::builtin());
         deps.set_audio_decoder_factory(&AudioDecoderFactory::builtin());
@@ -281,7 +279,6 @@ impl WebRtcEngine {
             audio_codec_type: config.audio_codec_type.clone(),
             _env: env,
             _network_thread: network_thread,
-            _worker_thread: worker_thread,
             _signaling_thread: signaling_thread,
         })
     }

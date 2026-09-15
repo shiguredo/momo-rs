@@ -168,6 +168,9 @@
   - libcamera を利用したカメラキャプチャーと V4L2 M2M エンコーダーを利用したテストを追加
   - @voluntas
 - [FIX] CUDA 利用時のビルドを Ubuntu 22.04 / 24.04 に合わせたパッケージを利用する用にする
+- [UPDATE] Ayame / P2P の worker thread に network thread を使う
+  - 専用 worker thread の生成を削除し、`PeerConnectionFactoryDependencies::set_worker_thread` に network thread を渡す
+  - @melpon
 
 ## 2025.1.3
 
