@@ -520,20 +520,20 @@ async fn main() -> noargs::Result<()> {
         .is_present()
     {
         run_sora(sub_args(&args), momo_config, metrics_state).await?;
-    } else if noargs::cmd("moq")
+    } else if noargs::cmd("sora-moq")
         .doc("Mode for working with MOQT (Media over QUIC Transport)")
         .take(&mut args)
         .is_present()
     {
         #[cfg(feature = "moq")]
         {
-            run_moq(sub_args(&args)).await?;
+            run_sora_moq(sub_args(&args)).await?;
         }
         #[cfg(not(feature = "moq"))]
         {
             return Err(noargs::Error::other(
                 &noargs::raw_args(),
-                "moq mode requires the 'moq' feature to be enabled",
+                "sora-moq mode requires the 'moq' feature to be enabled",
             ));
         }
     } else if let Some(help) = args.finish()? {
@@ -818,11 +818,11 @@ async fn run_p2p(
         .map_err(|e| noargs::Error::other(&noargs::raw_args(), e))
 }
 
-// ─── MOQT ──────────────────────────────────────────────────────────────────
+// ─── Sora MOQT ─────────────────────────────────────────────────────────────
 
-/// `momo moq` サブコマンドを実行する
+/// `momo sora-moq` サブコマンドを実行する
 #[cfg(feature = "moq")]
-async fn run_moq(args: noargs::RawArgs) -> noargs::Result<()> {
+async fn run_sora_moq(args: noargs::RawArgs) -> noargs::Result<()> {
     moq::cli::run(args).await
 }
 

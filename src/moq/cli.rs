@@ -1,6 +1,6 @@
 //! MOQT (Media over QUIC Transport) モードの CLI
 //!
-//! `momo moq publish` / `momo moq subscribe` のサブコマンドを提供する。
+//! `momo sora-moq publish` / `momo sora-moq subscribe` のサブコマンドを提供する。
 //! 現時点では MOQT セッションの確立と制御メッセージの処理までを実装している。
 
 use std::time::Duration;
@@ -17,31 +17,31 @@ use crate::moq::{ControlStream, MoqConfig, establish_session};
 /// トラックの publish / subscribe を実装するまでの暫定値。
 const OBSERVE_DURATION: Duration = Duration::from_secs(5);
 
-/// `momo moq` サブコマンドを実行する
+/// `momo sora-moq` サブコマンドを実行する
 ///
 /// 第 1 サブコマンドで役割 (publish / subscribe) を選ぶ。
 pub async fn run(mut args: noargs::RawArgs) -> noargs::Result<()> {
     noargs::HELP_FLAG.take_help(&mut args);
 
-    if noargs::cmd("subscribe")
-        .doc("Subscribe to MOQT tracks and play them")
-        .take(&mut args)
-        .is_present()
-    {
-        run_role(args, Role::Subscriber).await
-    } else if noargs::cmd("publish")
+    if noargs::cmd("publish")
         .doc("Publish MOQT tracks")
         .take(&mut args)
         .is_present()
     {
         run_role(args, Role::Publisher).await
+    } else if noargs::cmd("subscribe")
+        .doc("Subscribe to MOQT tracks and play them")
+        .take(&mut args)
+        .is_present()
+    {
+        run_role(args, Role::Subscriber).await
     } else if let Some(help) = args.finish()? {
         print!("{}", help);
         Ok(())
     } else {
         Err(noargs::Error::other(
             &noargs::raw_args(),
-            "moq mode requires a subcommand: publish or subscribe",
+            "sora-moq mode requires a subcommand: publish or subscribe",
         ))
     }
 }
@@ -68,39 +68,42 @@ impl Role {
 /// `publish` / `subscribe` の共通処理を実行する
 async fn run_role(mut args: noargs::RawArgs, role: Role) -> noargs::Result<()> {
     noargs::HELP_FLAG.take_help(&mut args);
-    let config = parse_common_options(&mut args)?;
+
+    // オプションを宣言してからヘルプを判定する。noargs は宣言済みのオプションだけを
+    // ヘルプに載せるため、先に return するとオプション一覧が空になる。
+    // 値の必須判定は help_mode を見てから行う (下記の OptionSpec::take は
+    // ヘルプ要求時にも値を要求するため、ここでは present() で有無だけを見る)
+    let url = noargs::opt("url")
+        .ty("URL")
+        .doc("MOQT relay URL (moqt://host:port/path)")
+        .take(&mut args)
+        .present()
+        .map(|o| o.value().to_owned());
+    let ca_cert = noargs::opt("ca-cert")
+        .ty("PATH")
+        .doc("CA certificate file for verifying the relay")
+        .take(&mut args)
+        .present()
+        .map(|o| o.value().to_owned());
 
     if let Some(help) = args.finish()? {
         print!("{}", help);
         return Ok(());
     }
 
+    let url =
+        url.ok_or_else(|| noargs::Error::other(&noargs::raw_args(), "missing '--url' option"))?;
+
+    let config = MoqConfig {
+        url,
+        insecure: ca_cert.is_none(),
+        ca_cert,
+    };
+
     if let Err(e) = run_session(config, role).await {
         return Err(noargs::Error::other(&noargs::raw_args(), format!("{e}")));
     }
     Ok(())
-}
-
-/// `publish` / `subscribe` で共通のオプションを解析する
-fn parse_common_options(args: &mut noargs::RawArgs) -> noargs::Result<MoqConfig> {
-    let url: String = noargs::opt("url")
-        .ty("URL")
-        .doc("MOQT relay URL (moqt://host:port/path)")
-        .take(args)
-        .then(|o| o.value().parse())?;
-
-    let ca_cert: Option<String> = noargs::opt("ca-cert")
-        .ty("PATH")
-        .doc("CA certificate file for verifying the relay")
-        .take(args)
-        .present()
-        .map(|o| o.value().to_owned());
-
-    Ok(MoqConfig {
-        url,
-        insecure: ca_cert.is_none(),
-        ca_cert,
-    })
 }
 
 /// MOQT セッションを確立して制御メッセージを処理する
