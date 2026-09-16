@@ -94,22 +94,8 @@ jobs:
       - run: rustup update stable
       - name: Add Rust target
         run: rustup target add aarch64-unknown-linux-gnu
-      - name: Install cross-compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-      - name: Install build dependencies
-        run: |
-          sudo apt-get install -y build-essential clang dpkg-dev \
-            debian-archive-keyring
-          sudo install -Dm644 /usr/share/keyrings/debian-archive-keyring.gpg \
-            /etc/apt/trusted.gpg.d/debian-archive-keyring.gpg
-      - name: Install Raspberry Pi archive keyring
-        run: |
-          curl -fsSL http://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2021.1.1+rpt1_all.deb \
-            -o /tmp/rpi-keyring.deb && sudo dpkg -i /tmp/rpi-keyring.deb && rm /tmp/rpi-keyring.deb
-          sudo install -Dm644 /usr/share/keyrings/raspberrypi-archive-keyring.gpg \
-            /etc/apt/trusted.gpg.d/raspberrypi-archive-keyring.gpg
+      - name: Install dependencies
+        run: ./.devcontainer/install-deps.sh raspberrypi
       - name: Install cargo-shiguredo-sysroot
         run: cargo install shiguredo_sysroot
       - name: Install sysroot
@@ -134,20 +120,8 @@ jobs:
       - run: rustup update stable
       - name: Add Rust target
         run: rustup target add aarch64-unknown-linux-gnu
-      - name: Install cross-compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-      - name: Install build dependencies
-        run: |
-          sudo apt-get install -y build-essential clang dpkg-dev \
-            debian-archive-keyring
-          sudo install -Dm644 /usr/share/keyrings/debian-archive-keyring.gpg \
-            /etc/apt/trusted.gpg.d/debian-archive-keyring.gpg
-          if [ -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ]; then
-            sudo install -Dm644 /usr/share/keyrings/ubuntu-archive-keyring.gpg \
-              /etc/apt/trusted.gpg.d/ubuntu-archive-keyring.gpg
-          fi
+      - name: Install dependencies
+        run: ./.devcontainer/install-deps.sh
       - name: Install cargo-shiguredo-sysroot
         run: cargo install shiguredo_sysroot
       - name: Install sysroot
@@ -157,9 +131,29 @@ jobs:
       - name: Build
         run: make sysroot-build-ubuntu-${{ matrix.version }}_arm64-release
 
+  macos-build:
+    name: macOS ${{ matrix.os }} Build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-26
+          - macos-15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - run: rustup update stable
+      - name: Clippy
+        run: cargo clippy --workspace --features ayame,sora -- -D warnings
+      - name: Build
+        run: cargo build --workspace --features ayame,sora
+      - name: Test
+        run: cargo test --workspace --features ayame,sora
+
   windows-build:
     name: Windows x86_64 Build
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -187,6 +181,7 @@ jobs:
       - e2e-test
       - raspberrypi-arm64-build
       - ubuntu-arm64-build
+      - macos-build
       - windows-build
     timeout-minutes: 5
     runs-on: ubuntu-slim

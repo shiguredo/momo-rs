@@ -32,12 +32,20 @@ WebRTC シグナリングサーバー [Ayame](https://github.com/OpenAyame/ayame
 
 WebRTC SFU [Sora](https://sora.shiguredo.jp) に対応したモードです。
 
+### Sora MOQT モード
+
+MOQT (Media over QUIC Transport) の relay に接続するモードです。
+
 ## 動作環境
 
-- macOS 15 arm64
-- macOS 14 arm64
-- Ubuntu 24.04 x86_64
-- Ubuntu 22.04 x86_64
+| OS | アーキテクチャ | 提供形態 |
+|---|---|---|
+| macOS 26 | arm64 | ネイティブ |
+| macOS 15 | arm64 | ネイティブ |
+| Ubuntu 24.04 | x86_64 | ネイティブ |
+| Ubuntu 22.04 | x86_64 | ネイティブ |
+| Ubuntu 24.04 | arm64 | クロスコンパイル |
+| Ubuntu 22.04 | arm64 | クロスコンパイル |
 
 ## ビルド
 
@@ -47,47 +55,17 @@ Rust 1.98 以上が必要です（`Cargo.toml` の `rust-version` と合わせ�
 cargo build --release
 ```
 
-## 開発
-
-Git フックは prek で管理しています。インストールすると、コミット時に `cargo fmt` / `cargo clippy` / ruff / ty が走ります。
-
-```bash
-prek install --prepare-hooks
-```
-
-よく使うターゲットは Makefile にまとめています。
-
-| タスク | コマンド | 内容 |
-|---|---|---|
-| チェック | `make check` | `cargo check --workspace` |
-| リント | `make clippy` | `cargo clippy --workspace -- -D warnings` |
-| テスト | `make test` | `cargo test --workspace` |
-| フォーマット | `make fmt` | `cargo fmt --all` |
-| カバレッジ | `make cover` | `cargo llvm-cov --tests --workspace` (cargo-llvm-cov が必要) |
-
-E2E テストは uv で管理しています。P2P モード・メトリクス API・CLI 検証は認証情報なしで実行できます。
-
-```bash
-uv sync
-uv run pytest e2e-tests/test_p2p_mode.py e2e-tests/test_metrics_api.py e2e-tests/test_momo_validation.py
-```
-
-Sora モードの E2E テストは次の環境変数が必要なため、未設定のときはスキップされます。
-
-- `TEST_SORA_MODE_SIGNALING_URLS`: シグナリング URL
-- `TEST_SORA_MODE_CHANNEL_ID_PREFIX`: チャネル ID の接頭辞
-- `TEST_SORA_MODE_SECRET_KEY`: 認証トークンを署名する鍵
-
-ビルド済みバイナリを tests に使わせる場合は `MOMO_BINARY` にパスを指定します。未指定ときは `target/debug/momo`、次に `target/release/momo` を探します。
-
 ## クロスコンパイル
 
-Dev Container (Debian Trixie) 内でクロスコンパイルを行います。
+Linux 向けのクロスコンパイルはコンテナ内で行います。Apple container を推奨しますが、Docker でも同じ手順が使えます。
 
-### 前提条件
+### イメージのビルド
 
-- Docker
-- VS Code + Dev Containers 拡張
+```bash
+container build -t momo-dev -f .devcontainer/Dockerfile .devcontainer
+```
+
+Docker を使う場合は `container` を `docker` に読み替えてください。
 
 ### 対応ターゲット
 
@@ -101,20 +79,18 @@ Dev Container (Debian Trixie) 内でクロスコンパイルを行います。
 
 ### 手順
 
-1. VS Code でリポジトリを開き、コマンドパレットから **Dev Containers: Reopen in Container** を選択する
-2. sysroot を生成する（初回のみ）
+1. イメージをビルドする
+2. コンテナ内で sysroot を生成してからビルドする
 
 ```bash
-make sysroot-raspberry-pi
+container run --rm --cpus 8 --memory 16g \
+  -v $(pwd):/workspace -v momo-target:/workspace/target -w /workspace \
+  momo-dev bash -c 'make sysroot-raspberry-pi && make sysroot-build-raspberry-pi'
 ```
 
-3. ビルドする
+`target` はボリュームに置きます。Apple container ではマウントしたホストのディレクトリに sysroot を展開できません。
 
-```bash
-make sysroot-build-raspberry-pi
-```
-
-4. macOS に戻る場合はコマンドパレットから **Dev Containers: Reopen Folder Locally** を選択する
+コンテナ内で必要な環境変数の設定例は Makefile の `clippy-raspberry-pi` を参照してください。
 
 ## 使い方
 
@@ -184,11 +160,42 @@ make sysroot-build-raspberry-pi
 - `--data-channel-label LABELS`: 接続時に作成するデータチャネル（カンマ区切り、各ラベルは `#` 始まり）
 - `--forwarding-filter JSON`: 他参加者の映像・音声の受信を制御する転送フィルター（JSON 配列）
 
+### Sora MOQT モード
+
+MOQT (Media over QUIC Transport) の relay に接続し、トラックを publish または subscribe します。`moq` feature が必要です。
+
+```bash
+cargo build --release --features moq
+```
+
+```bash
+# トラックを publish する
+./momo sora-moq publish \
+  --url moqt://example.com:4433/live \
+  --namespace your-namespace
+
+# トラックを subscribe する
+./momo sora-moq subscribe \
+  --url moqt://example.com:4433/live \
+  --namespace your-namespace
+```
+
+**オプション:**
+
+- `--url URL`: MOQT relay の URL（`moqt://host:port/path` 形式。必須）
+- `--namespace NAMESPACE`: Track Namespace（必須）
+
+**実装状況:**
+
+MOQT セッションの確立（SETUP の交換）までを実装しています。トラックの publish と subscribe、および映像と音声の送受信は未実装です。
+
 ### 受信映像の表示
 
 Sora で受信した映像 (recvonly / sendrecv) を SDL3 ウィンドウにグリッド表示します。ローカルのカメラ映像は表示しません。
 
 **ビルド:**
+
+`player` はデフォルトで有効です。無効にしている場合は明示してください。
 
 ```bash
 cargo build --release
@@ -215,16 +222,63 @@ cargo build --release
 
 ### グローバルオプション
 
+#### デバイス
+
 | オプション | 説明 |
 |---|---|
+| `--video-input-device DEVICE` | 映像デバイスを名前またはインデックスで指定 |
+| `--audio-input-device DEVICE` | 音声入力デバイスを名前、インデックス、unique_id で指定 |
+| `--audio-output-device DEVICE` | 音声出力デバイスを名前、インデックス、unique_id で指定 |
 | `--no-video-input-device` | 映像入力デバイスを使用しない |
 | `--no-audio-device` | 音声デバイスを使用しない |
-| `--fake-capture-device` | フェイク映像/音声キャプチャデバイスを使用する |
-| `--no-google-stun` | Google STUN サーバーを使用しない |
-| `--video-input-device DEVICE` | 映像デバイスを名前またはインデックスで指定 |
-| `--audio-input-device DEVICE` | 音声入力デバイスを名前・インデックス・unique_id で指定 |
-| `--audio-output-device DEVICE` | 音声出力デバイスを名前・インデックス・unique_id で指定 |
+| `--fake-capture-device` | フェイク映像と音声のキャプチャデバイスを使用する |
 | `--list-devices` | 利用可能なデバイス一覧を JSON 形式で出力して終了 |
+| `--video-codec-engines` | 利用可能な映像エンコーダーとデコーダーを一覧表示して終了 |
+| `--force-i420` / `--force-yuy2` / `--force-nv12` | キャプチャのピクセルフォーマットを強制する |
+
+#### 映像
+
+| オプション | 説明 |
+|---|---|
+| `--resolution RESOLUTION` | 解像度（QVGA、VGA、HD、FHD、4K、または `WIDTHxHEIGHT`。デフォルト: VGA） |
+| `--framerate FRAMERATE` | フレームレート（1-120。デフォルト: 30） |
+| `--degradation-preference PREFERENCE` | 劣化時に維持する品質（balanced、maintain-framerate、maintain-resolution） |
+| `--window-width WIDTH` | 映像ウィンドウ幅（`player` feature が必要。デフォルト: 640） |
+| `--window-height HEIGHT` | 映像ウィンドウ高さ（`player` feature が必要。デフォルト: 480） |
+| `--fullscreen` | 映像を全画面表示する（`player` feature が必要） |
+
+#### TLS
+
+| オプション | 説明 |
+|---|---|
+| `--insecure` | サーバー証明書の検証をスキップする |
+| `--cacert PATH` | CA 証明書ファイルを PEM 形式で指定する |
+| `--client-cert PATH` / `--client-key PATH` | クライアント証明書と秘密鍵を指定する（同時指定が必要） |
+
+#### ログとメトリクス
+
+| オプション | 説明 |
+|---|---|
+| `--log-level LEVEL` | ログ出力レベル（verbose、info、warning、error、none。デフォルト: info） |
+| `--metrics-port PORT` | メトリクス API のポート番号（デフォルト: -1 で無効） |
+| `--metrics-allow-external-ip` | メトリクス API への外部 IP からのアクセスを許可する |
+
+#### コーデック
+
+| オプション | 説明 |
+|---|---|
+| `--openh264 PATH` | OpenH264 ライブラリのパスを指定する |
+| `--h264-encoder TYPE` / `--h264-decoder TYPE` | H.264 のエンコーダーとデコーダーを指定する |
+| `--h265-encoder TYPE` / `--h265-decoder TYPE` | H.265 のエンコーダーとデコーダーを指定する |
+| `--vp9-encoder TYPE` / `--vp9-decoder TYPE` | VP9 のエンコーダーとデコーダーを指定する |
+| `--av1-encoder TYPE` / `--av1-decoder TYPE` | AV1 のエンコーダーとデコーダーを指定する |
+
+#### その他
+
+| オプション | 説明 |
+|---|---|
+| `--no-google-stun` | Google STUN サーバーを使用しない |
+| `--serial DEVICE,BAUDRATE` | シリアルポートとデータチャネルを連携する（Linux のみ） |
 
 ## momo (C++ 版) との違い
 
@@ -250,28 +304,7 @@ cargo build --release
 
 ### 未実装機能
 
-音声処理 (shiguredo_webrtc API 不足のため pending):
-
-- `--disable-echo-cancellation` / `--disable-auto-gain-control` / `--disable-noise-suppression` / `--disable-highpass-filter`
-
-コーデック選択:
-
-- `--{codec}-encoder` / `--{codec}-decoder` (HW バックエンド未実装のため pending)
-- `--video-codec-engines`
-- `--hw-mjpeg-decoder`
-
-HW エンコード:
-
-- Jetson (H.264/H.265)
-- NVIDIA NvCodec/CUDA (H.264/H.265)
-- Intel oneVPL (H.264/H.265)
-
-その他:
-
-- スクリーンキャプチャ (`--screen-capture`)
-- ログファイル出力 (ローテーション)
-- SoraServer (`--port` / `--auto` による Sora モードの HTTP サーバー)
-- `--data-channel-signaling-timeout` (sora_sdk に API なし)
+momo にあるが momo-rs に未実装の機能の一覧は [docs/MOMO.md](docs/MOMO.md) を参照してください。
 
 ## ライセンス
 
