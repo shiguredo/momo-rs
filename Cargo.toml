@@ -35,6 +35,9 @@ shiguredo_video_device = "2026.3"
 shiguredo_webrtc = "0.152.1-canary.2"
 # WebSocket クライアント (Ayame / P2P シグナリング)
 shiguredo_websocket = "2026.3"
+# MOQT 本体 (moq モード)
+# 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
+shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "090adc20fcfcd735c3eb710a16a1fea7c397d756", optional = true }
 # Sora 接続 SDK (sora モジュール / コーデック capability)
 # DegradationPreference 設定 API が 2026.2.0-canary 系で初めて利用可能になったためプレリリースを使う。
 # 安定版 2026.1.x は shiguredo_webrtc ~0.150 に固定する制約もあり追従できない
@@ -44,6 +47,8 @@ sora_sdk = "2026.2.0-canary.3"
 
 # CLI 引数のパース (main.rs)
 noargs = "0.4"
+# バイト列操作 (moq モードの QUIC ストリーム)
+bytes = { version = "1.12", optional = true }
 # JSON のパース・生成 (Ayame / P2P のシグナリングメッセージ)
 nojson = "0.3"
 
@@ -59,6 +64,13 @@ rustls = { version = "0.23", default-features = false, features = [
 rustls-pki-types = { version = "1.15", features = ["std"] }
 # OS の証明書ストアを使ったサーバー証明書検証 (Ayame シグナリング)
 rustls-platform-verifier = "0.7"
+# QUIC クライアント (moq モードのトランスポート)
+# Object Datagram に datagram provider が必要で、s2n-quic では unstable feature になる
+s2n-quic = { version = "1.88", default-features = false, features = [
+  "provider-address-token-default",
+  "provider-tls-rustls",
+  "unstable-provider-datagram",
+], optional = true }
 # 非同期ランタイム
 tokio = { version = "1.53", features = [
   "fs",
@@ -97,6 +109,8 @@ default = ["player"]
 amf = ["sora_sdk/amf"]
 # NVIDIA NVENC/NVDEC ハードウェアエンコーダー・デコーダー
 nvcodec = ["sora_sdk/nvcodec"]
+# MOQT モード (momo sora-moq)
+moq = ["dep:bytes", "dep:s2n-quic", "dep:shiguredo_moqt"]
 player = ["dep:raw_player"]
 raspberrypi = ["shiguredo_libcamera", "shiguredo_v4l2"]
 # Intel oneVPL ハードウェアエンコーダー・デコーダー
