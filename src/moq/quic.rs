@@ -1,7 +1,7 @@
 //! MOQT の QUIC 接続確立
 //!
 //! TLS / ALPN / datagram provider を構築し、`s2n-quic` で接続を確立する。
-//! QUIC 実装への依存はこのファイルに閉じ込め、他は `moq.rs` の薄いラッパー越しに扱う。
+//! QUIC 実装への依存はこのファイルに閉じ込め、他は `transport.rs` 越しに扱う。
 
 use std::sync::Arc;
 
@@ -11,6 +11,8 @@ use s2n_quic::connection::Connection;
 use s2n_quic::provider::tls::rustls as s2n_rustls;
 // PEM 形式の証明書を読み込むためのトレイト
 use rustls_pki_types::pem::PemObject;
+// システムのルート証明書を使う TLS 設定を構築するためのトレイト
+use rustls_platform_verifier::BuilderVerifierExt;
 
 use crate::moq::error::MoqError;
 use crate::moq::url::ServerUrl;
@@ -26,8 +28,9 @@ const DATAGRAM_RECV_CAPACITY: usize = 64;
 
 /// QUIC 接続を確立する
 ///
-/// `ca_cert` が `Some` の場合はその証明書で検証し、`None` かつ `insecure` が真の場合は
-/// 証明書検証をスキップする。どちらでもない場合はシステムのルート証明書で検証する。
+/// `insecure` が真の場合は証明書検証をスキップし、`ca_cert` (PEM の内容) が指定された
+/// 場合はその証明書で検証する。両方指定された場合は `insecure` を優先する。
+/// どちらも指定されない場合はシステムのルート証明書で検証する。
 pub async fn connect(
     server: &ServerUrl,
     insecure: bool,
@@ -81,48 +84,46 @@ pub async fn connect(
 /// rustls の TLS クライアントを構築する
 ///
 /// ALPN に [`MOQT_ALPN`] を設定する。TLS は QUIC で必須のため TLS 1.3 のみを使う。
-/// `ca_cert` が `None` の場合は証明書検証をスキップする (開発用)。
 fn build_tls_client(insecure: bool, ca_cert: Option<&str>) -> Result<s2n_rustls::Client, MoqError> {
     let provider = rustls::crypto::aws_lc_rs::default_provider();
     let builder = rustls::ClientConfig::builder_with_provider(Arc::new(provider))
         .with_protocol_versions(&[&rustls::version::TLS13])
         .map_err(|e| MoqError::Tls(format!("failed to set TLS versions: {e}")))?;
 
-    let mut config = match ca_cert {
-        // CA 証明書を指定して検証する
-        Some(path) => {
-            let pem = std::fs::read(path)
-                .map_err(|e| MoqError::Tls(format!("failed to read certificate '{path}': {e}")))?;
-            let mut roots = rustls::RootCertStore::empty();
-            for certificate in rustls_pki_types::CertificateDer::pem_slice_iter(&pem[..]) {
-                let certificate = certificate
-                    .map_err(|e| MoqError::Tls(format!("failed to parse certificate: {e}")))?;
-                roots
-                    .add(certificate)
-                    .map_err(|e| MoqError::Tls(format!("failed to add root certificate: {e}")))?;
-            }
-            builder.with_root_certificates(roots).with_no_client_auth()
+    let mut config = if insecure {
+        // 検証をスキップする (--cacert より優先する)
+        tracing::warn!(target: "moq", "TLS certificate verification is disabled");
+        builder
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth()
+    } else if let Some(pem) = ca_cert {
+        // 指定した CA 証明書で検証する
+        let mut roots = rustls::RootCertStore::empty();
+        for certificate in rustls_pki_types::CertificateDer::pem_slice_iter(pem.as_bytes()) {
+            let certificate = certificate
+                .map_err(|e| MoqError::Tls(format!("failed to parse certificate: {e}")))?;
+            roots
+                .add(certificate)
+                .map_err(|e| MoqError::Tls(format!("failed to add root certificate: {e}")))?;
         }
-        // 検証をスキップする (開発用)
-        None => {
-            if !insecure {
-                tracing::warn!(
-                    target: "moq",
-                    "TLS certificate verification is disabled because no CA certificate is given"
-                );
-            }
-            builder
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                .with_no_client_auth()
+        if roots.is_empty() {
+            return Err(MoqError::Tls("no certificate in --cacert".to_owned()));
         }
+        builder.with_root_certificates(roots).with_no_client_auth()
+    } else {
+        // システムのルート証明書で検証する
+        builder
+            .with_platform_verifier()
+            .map_err(|e| MoqError::Tls(format!("failed to use the platform verifier: {e}")))?
+            .with_no_client_auth()
     };
 
     config.alpn_protocols = vec![MOQT_ALPN.to_vec()];
     Ok(s2n_rustls::Client::from(config))
 }
 
-/// 証明書検証をスキップする Verifier (開発用)
+/// 証明書検証をスキップする Verifier (`--insecure` 用)
 #[derive(Debug)]
 struct NoVerifier;
 

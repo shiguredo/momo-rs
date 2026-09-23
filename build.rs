@@ -20,6 +20,9 @@ fn main() {
     // 有効な feature をビルドフラグとして埋め込む
     // ayame / sora は feature ではなく常に有効なので固定で含める
     let mut flags = vec!["ayame", "sora"];
+    if std::env::var("CARGO_FEATURE_MOQ").is_ok() {
+        flags.push("moq");
+    }
     if std::env::var("CARGO_FEATURE_RASPBERRYPI").is_ok() {
         flags.push("raspberrypi");
     }

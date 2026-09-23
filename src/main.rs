@@ -527,7 +527,7 @@ async fn main() -> noargs::Result<()> {
     {
         #[cfg(feature = "moq")]
         {
-            run_sora_moq(sub_args(&args)).await?;
+            run_sora_moq(sub_args(&args), momo_config).await?;
         }
         #[cfg(not(feature = "moq"))]
         {
@@ -821,9 +821,25 @@ async fn run_p2p(
 // ─── Sora MOQT ─────────────────────────────────────────────────────────────
 
 /// `momo sora-moq` サブコマンドを実行する
+///
+/// MOQT モードは `--resolution` / `--framerate` / `--cacert` / `--insecure` など
+/// グローバルオプションを `MoqCommonConfig` 経由で受け取る。
 #[cfg(feature = "moq")]
-async fn run_sora_moq(args: noargs::RawArgs) -> noargs::Result<()> {
-    moq::cli::run(args).await
+async fn run_sora_moq(args: noargs::RawArgs, momo_config: MomoConfig) -> noargs::Result<()> {
+    let common = moq::config::MoqCommonConfig {
+        insecure: momo_config.insecure,
+        ca_cert: momo_config.ca_cert,
+        video_width: momo_config.video_width,
+        video_height: momo_config.video_height,
+        framerate: momo_config.framerate,
+        no_video_input_device: momo_config.no_video_input_device,
+        no_audio_device: momo_config.no_audio_device,
+        fake_capture_device: momo_config.fake_capture_device,
+        video_input_device: momo_config.video_input_device,
+        audio_input_device: momo_config.audio_input_device,
+        openh264_lib: momo_config.openh264_lib,
+    };
+    moq::cli::run(args, common).await
 }
 
 // ─── Ayame ─────────────────────────────────────────────────────────────────

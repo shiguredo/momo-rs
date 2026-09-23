@@ -25,6 +25,7 @@ TODO:
 | P2P モード | 実装済み | 実装済み | HTTP サーバー + WebSocket シグナリング |
 | Ayame モード | 実装済み | 実装済み | register/accept/reject/offer/answer/candidate |
 | Sora モード | 実装済み | 実装済み | sora_sdk を使用。SoraServer (`--auto`) は未実装。`--port` は削除済み |
+| Sora MOQT モード | なし | 実装済み | `moq` feature。MOQT relay へ映像 (H.264/avc1) と音声 (Opus) を publish / subscribe する |
 
 ### TODO
 
@@ -133,6 +134,33 @@ TODO:
   - `--spotlight-number` (momo-rs には CLI オプション自体が存在しない。momo にはあるが connect メッセージへ値を転送するのみで、クライアント側の意味論はない)
 - 未対応:
   - `--degradation-preference` (sora_sdk API 不足。明示指定すると起動時にエラーになる)
+
+### momo-rs の Sora MOQT モード実装詳細
+
+- `moq` feature で有効になる。publish / subscribe の両方を実装済み
+- 実装済み CLI オプション:
+  - `--url` (`moqt://host:port/path`), `--namespace`
+  - `--video-bit-rate` (1〜30000)、`--audio-bit-rate` (1〜510)、`--video-keyframe-interval` (フレーム数、デフォルト 60)
+  - `--no-video-input-device` / `--no-audio-device` で publish するトラックを無効化する (subscribe では使用しない)
+  - TLS は `--insecure` / `--cacert` を使う。両方指定時は `--insecure` を優先する。未指定時はシステムのルート証明書で検証する
+  - `--openh264` は映像の符号化に必須。subscribe では映像の復号に必須
+- プロトコル:
+  - MOQT `draft-ietf-moq-transport-21` (ALPN `moqt-21`)、LOC `draft-ietf-moq-loc-04`、MSF `draft-ietf-moq-msf-01`
+  - `shiguredo_moqt` の `Session` (Sans-I/O) を `s2n-quic` の I/O と `src/moq/client.rs` で繋ぐ
+- publish:
+  - 映像は OpenH264 で H.264 (avc1) に符号化し、payload は 4 バイト長プレフィックス、パラメーターセットは Video Config (0x0D) の AVCDecoderConfigurationRecord に載せる
+  - 音声は Opus (48 kHz / ステレオ / 20 ms) で符号化し、Audio Config (0x0F) に OpusHead を載せる
+  - 映像の Timescale は 90000、音声は 48000。キーフレームで Group を区切り、音声は 1 パケット = 1 Object = 1 Group で送る
+  - `catalog` トラックに MSF カタログを publish する。映像の codec 文字列は SPS から `avc1.PPCCLL` を組み立てる
+  - relay からの SUBSCRIBE には SUBSCRIBE_OK を返し、`catalog` の FETCH には FETCH_OK とカタログを返す
+- subscribe:
+  - `catalog` を FETCH し、codec の接頭辞 (`avc1` / `avc3` / `hvc1` / `hev1` / `av01` と `opus`) で映像と音声を見つけて両方を SUBSCRIBE する
+  - 映像は `shiguredo_openh264` の `Decoder`、音声は `shiguredo_opus` の `Decoder` で復号する
+  - 映像の表示と音声の再生には raw_player を使い、デコードはバックグラウンドのタスク、再生はメインスレッドで行う
+  - 表示待ちの映像フレームが 20 を超えたら Group 単位で捨てて受信を優先する
+- 未対応:
+  - Object Datagram での配信 (Subgroup のみ)
+  - `shiguredo_moqt` は git のリビジョンを固定して参照する (crates.io 未公開のため)
 
 ## メトリクス API
 

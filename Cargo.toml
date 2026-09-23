@@ -25,8 +25,10 @@ raw_player = { version = "2026.2", optional = true }
 shiguredo_audio_device = "2026.3"
 # HTTP/1.1 のリクエスト・レスポンス処理 (metrics / P2P)
 shiguredo_http11 = "2026.6"
-# OpenH264 エンコーダー・デコーダー (openh264.rs)
+# OpenH264 エンコーダー・デコーダー (openh264.rs / moq モードの映像経路)
 shiguredo_openh264 = "2026.2"
+# Opus エンコーダー・デコーダー (moq モードの音声経路)
+shiguredo_opus = { version = "2026.2", optional = true }
 # 映像入力デバイス (VideoCapture)
 shiguredo_video_device = "2026.3"
 # WebRTC 本体 (PeerConnection / トラック / RTP コーデック等)
@@ -37,7 +39,7 @@ shiguredo_webrtc = "0.152.1-canary.2"
 shiguredo_websocket = "2026.3"
 # MOQT 本体 (moq モード)
 # 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
-shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "090adc20fcfcd735c3eb710a16a1fea7c397d756", optional = true }
+shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "a9254ed13b743b73b9fea992642a1152dce1aca7", optional = true }
 # Sora 接続 SDK (sora モジュール / コーデック capability)
 # DegradationPreference 設定 API が 2026.2.0-canary 系で初めて利用可能になったためプレリリースを使う。
 # 安定版 2026.1.x は shiguredo_webrtc ~0.150 に固定する制約もあり追従できない
@@ -110,7 +112,13 @@ amf = ["sora_sdk/amf"]
 # NVIDIA NVENC/NVDEC ハードウェアエンコーダー・デコーダー
 nvcodec = ["sora_sdk/nvcodec"]
 # MOQT モード (momo sora-moq)
-moq = ["dep:bytes", "dep:s2n-quic", "dep:shiguredo_moqt"]
+moq = [
+  "dep:bytes",
+  "dep:raw_player",
+  "dep:s2n-quic",
+  "dep:shiguredo_moqt",
+  "dep:shiguredo_opus",
+]
 player = ["dep:raw_player"]
 raspberrypi = ["shiguredo_libcamera", "shiguredo_v4l2"]
 # Intel oneVPL ハードウェアエンコーダー・デコーダー

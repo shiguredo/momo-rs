@@ -1341,6 +1341,7 @@ dependencies = [
  "shiguredo_libcamera",
  "shiguredo_moqt",
  "shiguredo_openh264",
+ "shiguredo_opus",
  "shiguredo_v4l2",
  "shiguredo_video_device",
  "shiguredo_webrtc",
@@ -1355,7 +1356,7 @@ dependencies = [
 [[package]]
 name = "shiguredo_moqt"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/moqt-rs?rev=090adc20fcfcd735c3eb710a16a1fea7c397d756#090adc20fcfcd735c3eb710a16a1fea7c397d756"
+source = "git+https://github.com/shiguredo/moqt-rs?rev=a9254ed13b743b73b9fea992642a1152dce1aca7#a9254ed13b743b73b9fea992642a1152dce1aca7"
 dependencies = [
  "hashbrown 0.17.1",
  "noflate",
@@ -1385,6 +1386,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4a52b63138f4f927e7f5adc3b9f3a7b57dfacd53277aa2d1f2c66020a12338d"
 dependencies = [
  "bindgen",
+ "shiguredo_toml",
+]
+
+[[package]]
+name = "shiguredo_opus"
+version = "2026.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3064a246b3e243aee5cacb327400754d7c0ce7a74244c3a524afe4d59d9553a9"
+dependencies = [
+ "bindgen",
+ "shiguredo_cmake",
  "shiguredo_toml",
 ]
 

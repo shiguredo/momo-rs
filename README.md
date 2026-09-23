@@ -168,26 +168,37 @@ MOQT (Media over QUIC Transport) の relay に接続し、トラックを publis
 cargo build --release --features moq
 ```
 
+publish する映像の符号化と、subscribe した映像の復号には OpenH264 ライブラリが必要です。`--openh264` にライブラリのパスを指定してください。subscribe は raw_player で映像を表示し音声を再生するため、`moq` feature は `player` を一緒に有効化します。
+
 ```bash
-# トラックを publish する
+# カメラとマイクのトラックを publish する
 ./momo sora-moq publish \
   --url moqt://example.com:4433/live \
-  --namespace your-namespace
+  --namespace your-namespace \
+  --video-bit-rate 2000 \
+  --audio-bit-rate 64 \
+  --openh264 /path/to/libopenh264.so
 
-# トラックを subscribe する
+# カタログからトラックを見つけて subscribe し、映像と音声を再生する
 ./momo sora-moq subscribe \
   --url moqt://example.com:4433/live \
-  --namespace your-namespace
+  --namespace your-namespace \
+  --openh264 /path/to/libopenh264.so
 ```
 
 **オプション:**
 
 - `--url URL`: MOQT relay の URL（`moqt://host:port/path` 形式。必須）
 - `--namespace NAMESPACE`: Track Namespace（必須）
+- `--video-bit-rate KBPS`: 映像ビットレート（1〜30000。映像を publish する場合は必須）
+- `--audio-bit-rate KBPS`: 音声ビットレート（1〜510。音声を publish する場合は必須）
+- `--video-keyframe-interval FRAMES`: キーフレーム間隔（フレーム数。デフォルト: 60）
+
+`--no-video-input-device` / `--no-audio-device` は publish するトラックを無効化します。両方を指定すると publish するトラックが無くなるためエラーになります。TLS は既存の `--insecure` / `--cacert` を使います（両方指定時は `--insecure` を優先）。
 
 **実装状況:**
 
-MOQT セッションの確立（SETUP の交換）までを実装しています。トラックの publish と subscribe、および映像と音声の送受信は未実装です。
+publish と subscribe を実装しています。映像は H.264 (avc1、4 バイト長プレフィックス、パラメーターセットは Video Config の AVCDecoderConfigurationRecord)、音声は Opus (Audio Config に OpusHead) で送受信し、MSF カタログを `catalog` トラックとして publish / FETCH します。subscribe はカタログの codec の接頭辞で映像と音声を判定して両方を購読します。
 
 ### 受信映像の表示
 
