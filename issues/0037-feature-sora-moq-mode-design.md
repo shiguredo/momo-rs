@@ -1,7 +1,7 @@
 # sora-moq モードの引数を確定して CLI に反映する
 
 - Created: 2026-09-16
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-23
 - Branch: develop
 - Polished: {YYYY-MM-DD}
 
@@ -163,6 +163,16 @@ CI は `moq` feature を検証していないため、引数の実装を CI で�
 - README の Sora MOQT モード節と `docs/MOMO.md` の Sora モードのオプション記載が実装に合う
 - CI の `moq` feature のジョブで clippy / build / test が実行され、`--features ayame,sora` の指定が解消される
 - `cargo test --workspace --features moq` と `cargo clippy --workspace --all-targets --features moq -- -D warnings` が通る
+
+## 解決方法
+
+- `momo sora-moq publish` / `subscribe` の引数 (`--url` / `--namespace` / `--video-bit-rate` / `--audio-bit-rate` / `--video-keyframe-interval`) を実装した
+- `--no-video-input-device` / `--no-audio-device` で publish するトラックを選び、同時指定は起動時にエラーにした
+- TLS を `--cacert` と `--insecure` に統合し、未指定時はシステムのルート証明書で検証するようにした (`--insecure` が `--cacert` より優先)
+- `run_sora_moq` が `MomoConfig` から解像度 / フレームレート / TLS / デバイス指定を受け取るようにした
+- 引数の検証は `src/moq/config.rs` の `MoqConfig::validate` と `src/moq/cli.rs` の単体テストで担保した
+- CI の macOS ジョブが `moq` feature を検証するようにした
+- ローカルの sora-moq 開発 relay で publish / subscribe の動作を確認した
 
 ## 関連
 
