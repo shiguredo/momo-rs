@@ -145,11 +145,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - run: rustup update stable
       - name: Clippy
-        run: cargo clippy --workspace --features ayame,sora -- -D warnings
+        # moq feature を有効にして macOS 上で MOQT モードがビルド・テストできることを検証する
+        run: cargo clippy --workspace --features moq -- -D warnings
       - name: Build
-        run: cargo build --workspace --features ayame,sora
+        run: cargo build --workspace --features moq
       - name: Test
-        run: cargo test --workspace --features ayame,sora
+        run: cargo test --workspace --features moq
 
   windows-build:
     name: Windows x86_64 Build
