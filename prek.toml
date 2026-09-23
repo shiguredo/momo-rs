@@ -57,7 +57,7 @@ priority = 10
 # ─── remote: ruff (e2e-tests のみを対象にする) ────────────────────
 [[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.16.6"
+rev = "v0.16.8"
 
 [[repos.hooks]]
 id = "ruff-format"
@@ -72,7 +72,7 @@ priority = 10
 # ─── remote: ty (設定は pyproject.toml の [tool.ty] を参照する) ───
 [[repos]]
 repo = "https://github.com/astral-sh/ty-pre-commit"
-rev = "v0.0.79"
+rev = "v0.0.83"
 
 [[repos.hooks]]
 id = "ty"
