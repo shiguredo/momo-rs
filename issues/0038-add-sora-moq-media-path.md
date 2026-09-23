@@ -1,7 +1,7 @@
 # sora-moq のメディア経路を実装する
 
 - Created: 2026-09-16
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-23
 - Branch: develop
 - Polished: {YYYY-MM-DD}
 
@@ -82,6 +82,18 @@ subscribe 側:
 共通:
 
 - 単体テストで符号化と復号を検証する。E2E テストは MOQT relay を用意できる場合に publisher と subscriber の送受信を検証する (relay の用意ができない場合は単体テストまでとし、その旨を issue に記録する)
+
+## 解決方法
+
+- publisher は OpenH264 で H.264 (avc1) に符号化し、4 バイト長プレフィックスの payload と Video Config の AVCDecoderConfigurationRecord で publish するようにした
+- 映像の codec は SPS から `avc1.PPCCLL` を組み立て、キーフレームで Group を区切り、Timescale 90000 でキャプチャ時刻から Timestamp を変換する
+- 音声は Opus (48 kHz / ステレオ / 20 ms) で符号化し、Audio Config に OpusHead を載せ、1 パケット = 1 Object = 1 Group で送る
+- MSF カタログ (name / namespace / packaging / role / codec / bitrate / timescale / samplerate / channelConfig / maxGopDuration など) を `catalog` トラックとして publish するようにした
+- relay からの SUBSCRIBE に SUBSCRIBE_OK を、`catalog` の FETCH に FETCH_OK とカタログを返すようにした
+- subscriber はカタログを FETCH し、codec の接頭辞で映像と音声を見つけて両方を SUBSCRIBE し、OpenH264 と Opus で復号して raw_player で表示・再生するようにした
+- 表示待ちの映像フレームが上限を超えた場合は Group 単位で破棄して受信を優先する
+- 変換 (Annex B と長プレフィックス、avcC、OpusHead) とカタログの単体テストを追加した
+- ローカルの sora-moq 開発 relay で映像と音声の publish / subscribe を確認した (E2E テストは relay を必要とするため CI では単体テストまでとする)
 
 ## 関連
 
