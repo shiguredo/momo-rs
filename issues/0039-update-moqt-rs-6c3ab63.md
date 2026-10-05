@@ -1,7 +1,7 @@
 # moqt-rs の rev を 6c3ab63 へ更新し、リセットのエラーコードの型変更に追随する
 
 - Created: 2026-10-05
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-05
 - Branch: develop
 - Polished: {YYYY-MM-DD}
 
@@ -34,3 +34,12 @@ moqt-rs は crates.io 未公開のため git の rev を固定して参照して
 - `cargo check --features moq --all-targets` が通ること
 - `cargo clippy --features moq --all-targets -- -D warnings` が通ること
 - `cargo fmt --all -- --check` が通ること
+
+## 解決方法
+
+- `Cargo.toml` の rev を `6c3ab63e89f7c196d269deaee51881dfd9d71730` へ更新し、
+  `cargo update -p shiguredo_moqt` で `Cargo.lock` を再生成した
+- `RequestStreamEnd::Reset` の `error_code` を `Some(...)` で包み、QUIC 経路ではコードが
+  常にあることをコメントに残した
+- 検証: `cargo check --features moq --all-targets` / `cargo clippy --features moq --all-targets -- -D warnings` /
+  `cargo fmt --all -- --check` が exit 0
