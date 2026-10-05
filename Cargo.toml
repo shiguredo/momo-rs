@@ -39,7 +39,7 @@ shiguredo_webrtc = "0.152.1-canary.2"
 shiguredo_websocket = "2026.3"
 # MOQT 本体 (moq モード)
 # 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
-shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "a9254ed13b743b73b9fea992642a1152dce1aca7", optional = true }
+shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "6c3ab63e89f7c196d269deaee51881dfd9d71730", optional = true }
 # Sora 接続 SDK (sora モジュール / コーデック capability)
 # DegradationPreference 設定 API が 2026.2.0-canary 系で初めて利用可能になったためプレリリースを使う。
 # 安定版 2026.1.x は shiguredo_webrtc ~0.150 に固定する制約もあり追従できない
