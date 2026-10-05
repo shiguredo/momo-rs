@@ -255,8 +255,10 @@ impl SubgroupWriter {
             self.stream.reset(error_code)?;
             self.data_plane.send_data_stream_closed(
                 self.stream_id,
+                // ローカルの Cancelled による RESET であり、コードは常にあるため Some にする
+                // (moqt-rs は WebTransport で MOQT のコードへ戻せない場合に None を使う)
                 RequestStreamEnd::Reset {
-                    error_code,
+                    error_code: Some(error_code),
                     reliable_size: None,
                 },
             )?;

@@ -80,8 +80,10 @@ impl RecvStream {
             Ok(Some(data)) => Ok(RecvChunk::Data(data)),
             Ok(None) => Ok(RecvChunk::End(RequestStreamEnd::Fin)),
             Err(s2n_quic::stream::Error::StreamReset { error, .. }) => {
+                // QUIC 経路は QUIC のコード空間であり常にコードがあるため Some にする
+                // (moqt-rs は WebTransport で MOQT のコードへ戻せない場合に None を使う)
                 Ok(RecvChunk::End(RequestStreamEnd::Reset {
-                    error_code: error.into(),
+                    error_code: Some(error.into()),
                     reliable_size: None,
                 }))
             }
