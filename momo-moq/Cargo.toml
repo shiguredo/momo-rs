@@ -15,27 +15,27 @@ path = "src/main.rs"
 [dependencies]
 # 時雨堂クレート
 
-# 2D グラフィックス描画 (フェイク映像生成: media.rs)
+# 2D グラフィックス描画 (フェイク映像生成)
 raden.workspace = true
-# ローカルのプレビュー映像表示と音声再生 (subscriber.rs)
+# ローカルのプレビュー映像表示と音声再生
 raw_player.workspace = true
 # 音声入力デバイス (AudioCapture)
 shiguredo_audio_device.workspace = true
-# OpenH264 エンコーダー・デコーダー (h264.rs)
+# MOQT 本体
+shiguredo_moqt.workspace = true
+# OpenH264 エンコーダー・デコーダー
 shiguredo_openh264.workspace = true
-# Opus エンコーダー・デコーダー (opus.rs)
+# Opus エンコーダー・デコーダー
 shiguredo_opus.workspace = true
 # 映像入力デバイス (VideoCapture)
 shiguredo_video_device.workspace = true
-# MOQT 本体 (client / publisher / subscriber)
-shiguredo_moqt.workspace = true
 
 # 外部クレート
 
-# CLI 引数のパース (main.rs)
-noargs.workspace = true
 # バイト列操作 (QUIC ストリーム)
 bytes.workspace = true
+# CLI 引数のパース
+noargs.workspace = true
 
 # TLS 実装 (QUIC 接続)
 rustls.workspace = true
@@ -49,5 +49,5 @@ s2n-quic.workspace = true
 tokio.workspace = true
 # 構造化ログ出力
 tracing.workspace = true
-# tracing のサブスクライバ初期化と環境変数フィルタ (main.rs)
+# tracing のサブスクライバ初期化と環境変数フィルタ
 tracing-subscriber.workspace = true

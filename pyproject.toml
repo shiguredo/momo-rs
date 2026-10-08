@@ -7,20 +7,20 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "pytest",
-    "pytest-repeat",
-    "pytest-rerunfailures",
-    "pytest-timeout",
-    "httpx",
-    "pyjwt",
-    "python-dotenv",
+  "httpx",
+  "pyjwt",
+  "pytest",
+  "pytest-repeat",
+  "pytest-rerunfailures",
+  "pytest-timeout",
+  "python-dotenv",
 ]
 
 [tool.pytest.ini_options]
-# リポジトリルートから pytest を実行し、テスト本体は e2e-tests/ に置く
-testpaths = ["e2e-tests"]
 # test_*.py のみを pytest の収集対象とする
 python_files = ["test_*.py"]
+# リポジトリルートから pytest を実行し、テスト本体は e2e-tests/ に置く
+testpaths = ["e2e-tests"]
 # CI / ローカルでのフレーク対策 (pytest-rerunfailures)
 reruns = 3
 reruns_delay = 1

@@ -49,7 +49,7 @@ MOQT (Media over QUIC Transport) の relay に接続するモードです。`mom
 
 ## ビルド
 
-Rust 1.98 以上が必要です（`Cargo.toml` の `rust-version` と合わせています）。
+Rust 1.99 以上が必要です（`Cargo.toml` の `rust-version` と合わせています）。
 
 ```bash
 cargo build --release

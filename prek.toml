@@ -3,6 +3,10 @@
 #:schema https://www.schemastore.org/prek.json
 
 minimum_prek_version = "0.3.9"
+# stages 未指定のフックは pre-commit でだけ実行される
+default_stages = ["pre-commit"]
+# prek install で pre-commit と pre-push の両方の Git フックを入れる
+default_install_hook_types = ["pre-commit", "pre-push"]
 
 # ─── builtin: 基本チェック ────────────────────────────────────────
 [[repos]]
@@ -32,6 +36,16 @@ repo = "builtin"
 id = "check-json"
 exclude = { glob = [".devcontainer/devcontainer.json"] }
 
+# ─── remote: tombi (TOML のフォーマッタ・リンタ) ───────────────────
+[[repos]]
+repo = "https://github.com/tombi-toml/tombi-pre-commit"
+rev = "v1.7.3"
+hooks = [
+  # Cargo.lock は自動生成ファイルなので tombi の対象外にする
+  { id = "tombi-lint", exclude = { glob = "**/Cargo.lock" } },
+  { id = "tombi-format", exclude = { glob = "**/Cargo.lock" } },
+]
+
 # ─── local: cargo ────────────────────────────────────────────────
 [[repos]]
 repo = "local"
@@ -48,11 +62,22 @@ priority = 0
 [[repos.hooks]]
 id = "cargo-clippy"
 name = "cargo clippy"
-entry = "cargo clippy --workspace -- -D warnings"
+entry = "cargo clippy --workspace --all-targets -- -D warnings"
 language = "system"
 types = ["rust"]
 pass_filenames = false
 priority = 10
+
+# コミットを遅くしないため、テストは push 時にだけ実行する
+[[repos.hooks]]
+id = "cargo-test"
+name = "cargo test"
+entry = "cargo test --workspace"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+stages = ["pre-push"]
+priority = 20
 
 # ─── remote: ruff (e2e-tests のみを対象にする) ────────────────────
 [[repos]]

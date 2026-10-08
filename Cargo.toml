@@ -5,7 +5,7 @@ members = ["momo", "momo-moq"]
 [workspace.package]
 version = "2026.0.0"
 edition = "2024"
-rust-version = "1.98"
+rust-version = "1.99"
 homepage = "https://github.com/shiguredo/momo-rs"
 repository = "https://github.com/shiguredo/momo-rs"
 license = "Apache-2.0"
@@ -15,15 +15,18 @@ license = "Apache-2.0"
 
 # 2D グラフィックス描画 (フェイク映像生成)
 raden = "2026.2"
-# ローカルのプレビュー映像表示と音声再生 (display.rs / momo-moq の subscriber)
+# ローカルのプレビュー映像表示と音声再生
 raw_player = "2026.2"
 # 音声入出力デバイス (AudioCapture / AudioPlayback / ADM)
 shiguredo_audio_device = "2026.3"
 # HTTP/1.1 のリクエスト・レスポンス処理 (metrics / P2P)
 shiguredo_http11 = "2026.6"
-# OpenH264 エンコーダー・デコーダー (openh264.rs / momo-moq の映像経路)
+# MOQT 本体 (momo-moq)
+# 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
+shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "6c3ab63e89f7c196d269deaee51881dfd9d71730" }
+# OpenH264 エンコーダー・デコーダー
 shiguredo_openh264 = "2026.2"
-# Opus エンコーダー・デコーダー (momo-moq の音声経路)
+# Opus エンコーダー・デコーダー
 shiguredo_opus = "2026.2"
 # 映像入力デバイス (VideoCapture)
 shiguredo_video_device = "2026.3"
@@ -33,9 +36,6 @@ shiguredo_video_device = "2026.3"
 shiguredo_webrtc = "0.152.1-canary.2"
 # WebSocket クライアント (Ayame / P2P シグナリング)
 shiguredo_websocket = "2026.3"
-# MOQT 本体 (momo-moq)
-# 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
-shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "6c3ab63e89f7c196d269deaee51881dfd9d71730" }
 # Sora 接続 SDK (sora モジュール / コーデック capability)
 # DegradationPreference 設定 API が 2026.2.0-canary 系で初めて利用可能になったためプレリリースを使う。
 # 安定版 2026.1.x は shiguredo_webrtc ~0.150 に固定する制約もあり追従できない
@@ -43,46 +43,61 @@ sora_sdk = "2026.2.0-canary.3"
 
 # 外部クレート
 
-# CLI 引数のパース
-noargs = "0.4"
 # バイト列操作 (momo-moq の QUIC ストリーム)
 bytes = "1.12"
+# CLI 引数のパース
+noargs = "0.4"
 # JSON のパース・生成 (Ayame / P2P のシグナリングメッセージ)
 nojson = "0.3"
 
 # 暗号ライブラリ (乱数生成と rustls の暗号プロバイダで利用)
 aws-lc-rs = "1.18"
 # TLS 実装 (Ayame の wss 接続 / momo-moq の QUIC 接続)
-rustls = { version = "0.23", default-features = false, features = [
-  "aws-lc-rs",
-  "std",
-  "tls12",
-] }
+rustls = {
+  version = "0.23",
+  default-features = false,
+  features = [
+    "aws-lc-rs",
+    "std",
+    "tls12",
+  ]
+}
 # PEM など PKI 関連の型定義 (Ayame シグナリング / momo-moq の QUIC 接続)
 rustls-pki-types = { version = "1.15", features = ["std"] }
 # OS の証明書ストアを使ったサーバー証明書検証 (Ayame シグナリング / momo-moq の QUIC 接続)
 rustls-platform-verifier = "0.7"
 # QUIC クライアント (momo-moq のトランスポート)
 # Object Datagram に datagram provider が必要で、s2n-quic では unstable feature になる
-s2n-quic = { version = "1.88", default-features = false, features = [
-  "provider-address-token-default",
-  "provider-tls-rustls",
-  "unstable-provider-datagram",
-] }
+s2n-quic = {
+  version = "1.88",
+  default-features = false,
+  features = [
+    "provider-address-token-default",
+    "provider-tls-rustls",
+    "unstable-provider-datagram",
+  ]
+}
 # 非同期ランタイム
-tokio = { version = "1.53", features = [
-  "fs",
-  "io-util",
-  "macros",
-  "net",
-  "rt-multi-thread",
-  "sync",
-  "time",
-] }
+tokio = {
+  version = "1.53",
+  features = [
+    "fs",
+    "io-util",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "time",
+  ]
+}
 # tokio 上で動く TLS ストリーム (Ayame の wss)
-tokio-rustls = { version = "0.26", default-features = false, features = [
-  "aws-lc-rs",
-] }
+tokio-rustls = {
+  version = "0.26",
+  default-features = false,
+  features = [
+    "aws-lc-rs",
+  ]
+}
 # 構造化ログ出力
 tracing = "0.1"
 # tracing のサブスクライバ初期化と環境変数フィルタ
