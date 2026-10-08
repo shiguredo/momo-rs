@@ -3,7 +3,7 @@
 //! `moqt://host:port/path` 形式を受け取り、SETUP の AUTHORITY / PATH に載せる値と
 //! QUIC 接続に使うアドレスを取り出す。
 
-use crate::moq::error::MoqError;
+use crate::error::MoqError;
 
 /// MOQT のデフォルトポート
 const DEFAULT_PORT: u16 = 4433;

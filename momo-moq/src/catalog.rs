@@ -8,7 +8,7 @@ use shiguredo_moqt::msf::{
     MSF_CATALOG_TRACK_NAME, MsfCatalog, MsfCatalogDocument, MsfPackaging, MsfTrack,
 };
 
-use crate::moq::error::MoqError;
+use crate::error::MoqError;
 
 /// カタログを載せるトラック名
 pub const CATALOG_TRACK_NAME: &[u8] = MSF_CATALOG_TRACK_NAME;

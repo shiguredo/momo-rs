@@ -1,34 +1,30 @@
-[package]
-name = "shiguredo_momo"
+[workspace]
+resolver = "3"
+members = ["momo", "momo-moq"]
+
+[workspace.package]
 version = "2026.0.0"
 edition = "2024"
 rust-version = "1.98"
-description = "WebRTC Native Client Momo"
-readme = "README.md"
 homepage = "https://github.com/shiguredo/momo-rs"
 repository = "https://github.com/shiguredo/momo-rs"
 license = "Apache-2.0"
-include = ["/LICENSE", "/README.md", "/src/**"]
 
-[[bin]]
-name = "momo"
-path = "src/main.rs"
-
-[dependencies]
+[workspace.dependencies]
 # 時雨堂クレート
 
-# 2D グラフィックス描画 (フェイク映像生成: fake.rs)
+# 2D グラフィックス描画 (フェイク映像生成)
 raden = "2026.2"
-# ローカルのプレビュー映像表示 (preview.rs)
-raw_player = { version = "2026.2", optional = true }
+# ローカルのプレビュー映像表示と音声再生 (display.rs / momo-moq の subscriber)
+raw_player = "2026.2"
 # 音声入出力デバイス (AudioCapture / AudioPlayback / ADM)
 shiguredo_audio_device = "2026.3"
 # HTTP/1.1 のリクエスト・レスポンス処理 (metrics / P2P)
 shiguredo_http11 = "2026.6"
-# OpenH264 エンコーダー・デコーダー (openh264.rs / moq モードの映像経路)
+# OpenH264 エンコーダー・デコーダー (openh264.rs / momo-moq の映像経路)
 shiguredo_openh264 = "2026.2"
-# Opus エンコーダー・デコーダー (moq モードの音声経路)
-shiguredo_opus = { version = "2026.2", optional = true }
+# Opus エンコーダー・デコーダー (momo-moq の音声経路)
+shiguredo_opus = "2026.2"
 # 映像入力デバイス (VideoCapture)
 shiguredo_video_device = "2026.3"
 # WebRTC 本体 (PeerConnection / トラック / RTP コーデック等)
@@ -37,9 +33,9 @@ shiguredo_video_device = "2026.3"
 shiguredo_webrtc = "0.152.1-canary.2"
 # WebSocket クライアント (Ayame / P2P シグナリング)
 shiguredo_websocket = "2026.3"
-# MOQT 本体 (moq モード)
+# MOQT 本体 (momo-moq)
 # 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
-shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "6c3ab63e89f7c196d269deaee51881dfd9d71730", optional = true }
+shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "6c3ab63e89f7c196d269deaee51881dfd9d71730" }
 # Sora 接続 SDK (sora モジュール / コーデック capability)
 # DegradationPreference 設定 API が 2026.2.0-canary 系で初めて利用可能になったためプレリリースを使う。
 # 安定版 2026.1.x は shiguredo_webrtc ~0.150 に固定する制約もあり追従できない
@@ -47,32 +43,32 @@ sora_sdk = "2026.2.0-canary.3"
 
 # 外部クレート
 
-# CLI 引数のパース (main.rs)
+# CLI 引数のパース
 noargs = "0.4"
-# バイト列操作 (moq モードの QUIC ストリーム)
-bytes = { version = "1.12", optional = true }
+# バイト列操作 (momo-moq の QUIC ストリーム)
+bytes = "1.12"
 # JSON のパース・生成 (Ayame / P2P のシグナリングメッセージ)
 nojson = "0.3"
 
 # 暗号ライブラリ (乱数生成と rustls の暗号プロバイダで利用)
 aws-lc-rs = "1.18"
-# TLS 実装 (Ayame の wss 接続)
+# TLS 実装 (Ayame の wss 接続 / momo-moq の QUIC 接続)
 rustls = { version = "0.23", default-features = false, features = [
   "aws-lc-rs",
   "std",
   "tls12",
 ] }
-# PEM など PKI 関連の型定義 (Ayame シグナリング)
+# PEM など PKI 関連の型定義 (Ayame シグナリング / momo-moq の QUIC 接続)
 rustls-pki-types = { version = "1.15", features = ["std"] }
-# OS の証明書ストアを使ったサーバー証明書検証 (Ayame シグナリング)
+# OS の証明書ストアを使ったサーバー証明書検証 (Ayame シグナリング / momo-moq の QUIC 接続)
 rustls-platform-verifier = "0.7"
-# QUIC クライアント (moq モードのトランスポート)
+# QUIC クライアント (momo-moq のトランスポート)
 # Object Datagram に datagram provider が必要で、s2n-quic では unstable feature になる
 s2n-quic = { version = "1.88", default-features = false, features = [
   "provider-address-token-default",
   "provider-tls-rustls",
   "unstable-provider-datagram",
-], optional = true }
+] }
 # 非同期ランタイム
 tokio = { version = "1.53", features = [
   "fs",
@@ -89,37 +85,5 @@ tokio-rustls = { version = "0.26", default-features = false, features = [
 ] }
 # 構造化ログ出力
 tracing = "0.1"
-# tracing のサブスクライバ初期化と環境変数フィルタ (main.rs)
+# tracing のサブスクライバ初期化と環境変数フィルタ
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
-# 時雨堂クレート
-
-# libcamera 経由の映像キャプチャ (Raspberry Pi: libcamera.rs)
-shiguredo_libcamera = { version = "2026.1", optional = true }
-# V4L2 M2M ハードウェア H.264 エンコーダー (Raspberry Pi: v4l2_encoder.rs)
-# 2026.2.0 安定版に FnEncodeHandler 併用の H264Encoder が含まれるため canary 固定を解除する
-shiguredo_v4l2 = { version = "2026.2", optional = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-# termios / fcntl などの低レベルシステムコール (serial.rs)
-libc = "0.2"
-
-[features]
-default = ["player"]
-# AMD AMF ハードウェアエンコーダー・デコーダー
-amf = ["sora_sdk/amf"]
-# NVIDIA NVENC/NVDEC ハードウェアエンコーダー・デコーダー
-nvcodec = ["sora_sdk/nvcodec"]
-# MOQT モード (momo sora-moq)
-moq = [
-  "dep:bytes",
-  "dep:raw_player",
-  "dep:s2n-quic",
-  "dep:shiguredo_moqt",
-  "dep:shiguredo_opus",
-]
-player = ["dep:raw_player"]
-raspberrypi = ["shiguredo_libcamera", "shiguredo_v4l2"]
-# Intel oneVPL ハードウェアエンコーダー・デコーダー
-vpl = ["sora_sdk/vpl"]

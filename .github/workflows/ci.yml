@@ -3,7 +3,8 @@ name: ci
 on:
   push:
     paths:
-      - "src/**"
+      - "momo/**"
+      - "momo-moq/**"
       - "sysroot/**"
       - "e2e-tests/**"
       - "pyproject.toml"
@@ -145,12 +146,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - run: rustup update stable
       - name: Clippy
-        # moq feature を有効にして macOS 上で MOQT モードがビルド・テストできることを検証する
-        run: cargo clippy --workspace --features moq -- -D warnings
+        # macOS 上で momo-moq (MOQT モード) を含めてビルド・テストできることを検証する
+        run: cargo clippy --workspace -- -D warnings
       - name: Build
-        run: cargo build --workspace --features moq
+        run: cargo build --workspace
       - name: Test
-        run: cargo test --workspace --features moq
+        run: cargo test --workspace
 
   windows-build:
     name: Windows x86_64 Build

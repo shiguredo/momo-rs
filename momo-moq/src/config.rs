@@ -1,11 +1,11 @@
-//! MOQT モードの設定と引数の検証
+//! MOQT の設定と引数の検証
 //!
-//! `momo sora-moq publish` / `momo sora-moq subscribe` の設定を保持し、
+//! `momo-moq publish` / `momo-moq subscribe` の設定を保持し、
 //! 起動時に指定できる値の範囲を検証する。
 
 /// 映像ビットレートの下限 (kbps)
 ///
-/// 0 は Sora モードで「指定なし」を意味するため、sora-moq では拒否する。
+/// 0 はビットレートとして無効なため拒否する。
 pub const MIN_VIDEO_BIT_RATE: u32 = 1;
 /// 映像ビットレートの上限 (kbps)
 pub const MAX_VIDEO_BIT_RATE: u32 = 30000;
@@ -31,7 +31,7 @@ pub enum MoqRole {
     Subscribe,
 }
 
-/// `momo sora-moq` のサブコマンド引数から作る設定
+/// `momo-moq` のサブコマンド引数から作る設定
 #[derive(Debug, Clone)]
 pub struct MoqConfig {
     /// ロール
@@ -114,7 +114,7 @@ impl MoqConfig {
     }
 }
 
-/// `MomoConfig` から sora-moq に渡す共通設定
+/// publisher / subscriber に渡す共通設定
 ///
 /// グローバルオプションで指定される入力デバイスや解像度などと、
 /// TLS の設定をまとめて受け取る。

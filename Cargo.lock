@@ -1326,7 +1326,6 @@ name = "shiguredo_momo"
 version = "2026.0.0"
 dependencies = [
  "aws-lc-rs",
- "bytes",
  "libc",
  "noargs",
  "nojson",
@@ -1335,13 +1334,10 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
- "s2n-quic",
  "shiguredo_audio_device",
  "shiguredo_http11",
  "shiguredo_libcamera",
- "shiguredo_moqt",
  "shiguredo_openh264",
- "shiguredo_opus",
  "shiguredo_v4l2",
  "shiguredo_video_device",
  "shiguredo_webrtc",
@@ -1349,6 +1345,28 @@ dependencies = [
  "sora_sdk",
  "tokio",
  "tokio-rustls",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "shiguredo_momo_moq"
+version = "2026.0.0"
+dependencies = [
+ "bytes",
+ "noargs",
+ "raden",
+ "raw_player",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "s2n-quic",
+ "shiguredo_audio_device",
+ "shiguredo_moqt",
+ "shiguredo_openh264",
+ "shiguredo_opus",
+ "shiguredo_video_device",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

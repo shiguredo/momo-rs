@@ -1,6 +1,6 @@
-//! MOQT モードのメディアキャプチャと変換
+//! MOQT のメディアキャプチャと変換
 //!
-//! sora-moq の publisher が使う映像・音声のキャプチャと、エンコーダーへ渡す形式への
+//! publisher が使う映像・音声のキャプチャと、エンコーダーへ渡す形式への
 //! 変換をまとめる。疑似キャプチャ (`--fake-capture-device`) もここで扱う。
 
 use std::sync::Arc;
@@ -13,9 +13,9 @@ use shiguredo_video_device::{
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
+use crate::config::MoqCommonConfig;
 use crate::error::BoxError;
-use crate::moq::config::MoqCommonConfig;
-use crate::moq::error::MoqError;
+use crate::error::MoqError;
 
 /// キャプチャした I420 フレーム
 ///
@@ -174,8 +174,8 @@ pub fn start_audio_capture(
     .map_err(|e| MoqError::Media(format!("failed to resolve audio input device: {e}")))?;
     let config = AudioCaptureConfig {
         device_id,
-        sample_rate: crate::moq::opus::SAMPLE_RATE as i32,
-        channels: crate::moq::opus::CHANNELS as i32,
+        sample_rate: crate::opus::SAMPLE_RATE as i32,
+        channels: crate::opus::CHANNELS as i32,
     };
     let mut capture = AudioCapture::new(config, move |frame| {
         let pcm = match frame.format {
@@ -473,8 +473,8 @@ fn hue_to_rgb(hue: f32) -> (u8, u8, u8) {
 fn run_fake_audio(sender: mpsc::Sender<CapturedAudioFrame>, stop: Arc<AtomicBool>) {
     use std::f64::consts::PI;
 
-    let sample_rate = crate::moq::opus::SAMPLE_RATE;
-    let channels = crate::moq::opus::CHANNELS as usize;
+    let sample_rate = crate::opus::SAMPLE_RATE;
+    let channels = crate::opus::CHANNELS as usize;
     // 20 ms ぶんのフレームを作る
     let samples_per_frame = (sample_rate as usize / 1000) * 20;
     let frame_duration = std::time::Duration::from_millis(20);
@@ -493,7 +493,7 @@ fn run_fake_audio(sender: mpsc::Sender<CapturedAudioFrame>, stop: Arc<AtomicBool
         position += samples_per_frame as u64;
         let frame = CapturedAudioFrame {
             pcm,
-            channels: crate::moq::opus::CHANNELS,
+            channels: crate::opus::CHANNELS,
             sample_rate,
             timestamp_us: start.elapsed().as_micros() as i64,
         };

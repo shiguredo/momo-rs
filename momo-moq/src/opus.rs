@@ -6,7 +6,7 @@
 
 use shiguredo_opus::{Application, Decoder, DecoderConfig, Encoder, EncoderConfig, FrameDuration};
 
-use crate::moq::error::MoqError;
+use crate::error::MoqError;
 
 /// 音声のサンプリングレート (Hz)
 pub const SAMPLE_RATE: u32 = 48_000;

@@ -9,8 +9,6 @@ mod fake;
 #[cfg(feature = "raspberrypi")]
 mod libcamera;
 mod metrics;
-#[cfg(feature = "moq")]
-mod moq;
 mod openh264;
 mod p2p;
 #[cfg(target_os = "linux")]
@@ -520,22 +518,6 @@ async fn main() -> noargs::Result<()> {
         .is_present()
     {
         run_sora(sub_args(&args), momo_config, metrics_state).await?;
-    } else if noargs::cmd("sora-moq")
-        .doc("Mode for working with MOQT (Media over QUIC Transport)")
-        .take(&mut args)
-        .is_present()
-    {
-        #[cfg(feature = "moq")]
-        {
-            run_sora_moq(sub_args(&args), momo_config).await?;
-        }
-        #[cfg(not(feature = "moq"))]
-        {
-            return Err(noargs::Error::other(
-                &noargs::raw_args(),
-                "sora-moq mode requires the 'moq' feature to be enabled",
-            ));
-        }
     } else if let Some(help) = args.finish()? {
         print!("{}", help);
     }
@@ -816,30 +798,6 @@ async fn run_p2p(
     p2p::run(config)
         .await
         .map_err(|e| noargs::Error::other(&noargs::raw_args(), e))
-}
-
-// ─── Sora MOQT ─────────────────────────────────────────────────────────────
-
-/// `momo sora-moq` サブコマンドを実行する
-///
-/// MOQT モードは `--resolution` / `--framerate` / `--cacert` / `--insecure` など
-/// グローバルオプションを `MoqCommonConfig` 経由で受け取る。
-#[cfg(feature = "moq")]
-async fn run_sora_moq(args: noargs::RawArgs, momo_config: MomoConfig) -> noargs::Result<()> {
-    let common = moq::config::MoqCommonConfig {
-        insecure: momo_config.insecure,
-        ca_cert: momo_config.ca_cert,
-        video_width: momo_config.video_width,
-        video_height: momo_config.video_height,
-        framerate: momo_config.framerate,
-        no_video_input_device: momo_config.no_video_input_device,
-        no_audio_device: momo_config.no_audio_device,
-        fake_capture_device: momo_config.fake_capture_device,
-        video_input_device: momo_config.video_input_device,
-        audio_input_device: momo_config.audio_input_device,
-        openh264_lib: momo_config.openh264_lib,
-    };
-    moq::cli::run(args, common).await
 }
 
 // ─── Ayame ─────────────────────────────────────────────────────────────────

@@ -13,6 +13,6 @@ EOF
 
 echo "セットアップ完了"
 echo "以下のコマンドがそのまま動きます:"
-echo "  cargo build --features raspberrypi"
-echo "  cargo check --features raspberrypi"
-echo "  cargo clippy --features raspberrypi"
+echo "  cargo build -p shiguredo_momo --features raspberrypi"
+echo "  cargo check -p shiguredo_momo --features raspberrypi"
+echo "  cargo clippy -p shiguredo_momo --features raspberrypi"

@@ -14,8 +14,8 @@ use rustls_pki_types::pem::PemObject;
 // システムのルート証明書を使う TLS 設定を構築するためのトレイト
 use rustls_platform_verifier::BuilderVerifierExt;
 
-use crate::moq::error::MoqError;
-use crate::moq::url::ServerUrl;
+use crate::error::MoqError;
+use crate::url::ServerUrl;
 
 /// MOQT の ALPN プロトコル識別子
 ///

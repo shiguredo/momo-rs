@@ -1,6 +1,6 @@
-//! sora-moq の subscriber
+//! MOQT の subscriber
 //!
-//! `momo sora-moq subscribe` の実装。カタログを FETCH して映像と音声のトラックを見つけ、
+//! `momo-moq subscribe` の実装。カタログを FETCH して映像と音声のトラックを見つけ、
 //! SUBSCRIBE して受信した Object を復号し、raw_player で表示・再生する。
 //! 映像は H.264 (avc1、4 バイト長プレフィックス、パラメーターセットは Video Config)、
 //! 音声は Opus (Audio Config に OpusHead) を前提とする
@@ -30,16 +30,16 @@ use shiguredo_openh264::{Decoder as H264Decoder, Openh264Library};
 use tokio::sync::{Mutex, Semaphore};
 use tracing::{info, warn};
 
+use crate::catalog;
+use crate::client::{ClientEvent, DataPlaneHandle, MoqtClient};
+use crate::config::{MoqCommonConfig, MoqConfig};
 use crate::error::BoxError;
-use crate::moq::catalog;
-use crate::moq::client::{ClientEvent, DataPlaneHandle, MoqtClient};
-use crate::moq::config::{MoqCommonConfig, MoqConfig};
-use crate::moq::error::MoqError;
-use crate::moq::h264;
-use crate::moq::opus::{self, OpusDecoder};
-use crate::moq::quic;
-use crate::moq::transport::{RecvChunk, RecvStream, StreamAcceptor};
-use crate::moq::url::ServerUrl;
+use crate::error::MoqError;
+use crate::h264;
+use crate::opus::{self, OpusDecoder};
+use crate::quic;
+use crate::transport::{RecvChunk, RecvStream, StreamAcceptor};
+use crate::url::ServerUrl;
 
 /// session の timer を進める間隔
 const TICK_INTERVAL: Duration = Duration::from_millis(100);
@@ -121,7 +121,7 @@ enum StreamData {
     End,
 }
 
-/// `momo sora-moq subscribe` を実行する
+/// `momo-moq subscribe` を実行する
 ///
 /// 復号した映像と音声は `video_tx` / `audio_tx` へ送る。呼び出し側は
 /// [`run_player`] で再生する。
@@ -953,7 +953,7 @@ pub fn run_player(
                     let player = raw_player::VideoPlayer::new(
                         frame.width,
                         frame.height,
-                        "momo - MoQT Subscriber",
+                        "momo-moq - MoQT Subscriber",
                     )?;
                     player.play()?;
                     video_player = Some(player);

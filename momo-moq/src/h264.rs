@@ -8,7 +8,7 @@
 //! エンコーダーとデコーダー (`shiguredo_openh264`) は Annex B を使うため、
 //! 境界で相互変換する。
 
-use crate::moq::error::MoqError;
+use crate::error::MoqError;
 
 /// 長プレフィックスのサイズ (AVCDecoderConfigurationRecord の lengthSizeMinusOne に対応)
 pub const LENGTH_SIZE: usize = 4;

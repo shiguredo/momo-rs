@@ -124,15 +124,15 @@ sysroot-ubuntu-22.04_arm64:
 
 # Raspberry Pi 向け sysroot clippy する
 sysroot-clippy-raspberry-pi:
-	$(RASPBERRYPI_ENV) cargo clippy --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi -- -D warnings
+	$(RASPBERRYPI_ENV) cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi -- -D warnings
 
 # Ubuntu 24.04 arm64 向け sysroot clippy する
 sysroot-clippy-ubuntu-24.04_arm64:
-	$(UBUNTU_2404_ARM64_ENV) cargo clippy --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
+	$(UBUNTU_2404_ARM64_ENV) cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
 
 # Ubuntu 22.04 arm64 向け sysroot clippy する
 sysroot-clippy-ubuntu-22.04_arm64:
-	$(UBUNTU_2204_ARM64_ENV) cargo clippy --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
+	$(UBUNTU_2204_ARM64_ENV) cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
 
 # --- container を使った clippy ---
 
@@ -162,31 +162,31 @@ clippy-raspberry-pi:
 				rm -f .cargo/config.toml ; \
 				echo "=== sysroot 構築完了 ===" ; \
 			fi ; \
-			cargo clippy --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi -- -D warnings \
+			cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi -- -D warnings \
 		'
 
 # --- sysroot ビルド ---
 
 # Raspberry Pi 向け sysroot ビルドする
 sysroot-build-raspberry-pi:
-	$(RASPBERRYPI_ENV) cargo build --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi
+	$(RASPBERRYPI_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi
 
 # Raspberry Pi 向け sysroot リリースビルドする
 sysroot-build-raspberry-pi-release:
-	$(RASPBERRYPI_ENV) cargo build --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi --release
+	$(RASPBERRYPI_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --features raspberrypi --release
 
 # Ubuntu 24.04 arm64 向け sysroot ビルドする
 sysroot-build-ubuntu-24.04_arm64:
-	$(UBUNTU_2404_ARM64_ENV) cargo build --target aarch64-unknown-linux-gnu --no-default-features
+	$(UBUNTU_2404_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features
 
 # Ubuntu 24.04 arm64 向け sysroot リリースビルドする
 sysroot-build-ubuntu-24.04_arm64-release:
-	$(UBUNTU_2404_ARM64_ENV) cargo build --target aarch64-unknown-linux-gnu --no-default-features --release
+	$(UBUNTU_2404_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --release
 
 # Ubuntu 22.04 arm64 向け sysroot ビルドする
 sysroot-build-ubuntu-22.04_arm64:
-	$(UBUNTU_2204_ARM64_ENV) cargo build --target aarch64-unknown-linux-gnu --no-default-features
+	$(UBUNTU_2204_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features
 
 # Ubuntu 22.04 arm64 向け sysroot リリースビルドする
 sysroot-build-ubuntu-22.04_arm64-release:
-	$(UBUNTU_2204_ARM64_ENV) cargo build --target aarch64-unknown-linux-gnu --no-default-features --release
+	$(UBUNTU_2204_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --release

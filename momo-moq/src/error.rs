@@ -1,8 +1,11 @@
-//! MOQT モードのエラー型
+//! MOQT のエラー型
 
 use std::fmt;
 
-/// MOQT モードで発生するエラー
+/// ボックス化されたエラー型
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// MOQT で発生するエラー
 #[derive(Debug)]
 pub enum MoqError {
     /// URL の解析に失敗した

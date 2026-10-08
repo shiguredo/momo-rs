@@ -11,7 +11,8 @@ on:
       - "e2e-tests/**"
       - "pyproject.toml"
       - ".python-version"
-      - "src/**"
+      - "momo/**"
+      - "momo-moq/**"
       - "Cargo.toml"
       - "Cargo.lock"
   schedule:

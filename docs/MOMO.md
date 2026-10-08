@@ -25,7 +25,7 @@ TODO:
 | P2P モード | 実装済み | 実装済み | HTTP サーバー + WebSocket シグナリング |
 | Ayame モード | 実装済み | 実装済み | register/accept/reject/offer/answer/candidate |
 | Sora モード | 実装済み | 実装済み | sora_sdk を使用。SoraServer (`--auto`) は未実装。`--port` は削除済み |
-| Sora MOQT モード | なし | 実装済み | `moq` feature。MOQT relay へ映像 (H.264/avc1) と音声 (Opus) を publish / subscribe する |
+| MOQT モード (momo-moq) | なし | 実装済み | `momo-moq` バイナリ。MOQT relay へ映像 (H.264/avc1) と音声 (Opus) を publish / subscribe する |
 
 ### TODO
 
@@ -135,9 +135,9 @@ TODO:
 - 未対応:
   - `--degradation-preference` (sora_sdk API 不足。明示指定すると起動時にエラーになる)
 
-### momo-rs の Sora MOQT モード実装詳細
+### momo-rs の MOQT モード (momo-moq) 実装詳細
 
-- `moq` feature で有効になる。publish / subscribe の両方を実装済み
+- `momo-moq` バイナリとしてビルドされる。publish / subscribe の両方を実装済み
 - 実装済み CLI オプション:
   - `--url` (`moqt://host:port/path`), `--namespace`
   - `--video-bit-rate` (1〜30000)、`--audio-bit-rate` (1〜510)、`--video-keyframe-interval` (フレーム数、デフォルト 60)
@@ -146,7 +146,7 @@ TODO:
   - `--openh264` は映像の符号化に必須。subscribe では映像の復号に必須
 - プロトコル:
   - MOQT `draft-ietf-moq-transport-21` (ALPN `moqt-21`)、LOC `draft-ietf-moq-loc-04`、MSF `draft-ietf-moq-msf-01`
-  - `shiguredo_moqt` の `Session` (Sans-I/O) を `s2n-quic` の I/O と `src/moq/client.rs` で繋ぐ
+  - `shiguredo_moqt` の `Session` (Sans-I/O) を `s2n-quic` の I/O と `momo-moq/src/client.rs` で繋ぐ
 - publish:
   - 映像は OpenH264 で H.264 (avc1) に符号化し、payload は 4 バイト長プレフィックス、パラメーターセットは Video Config (0x0D) の AVCDecoderConfigurationRecord に載せる
   - 音声は Opus (48 kHz / ステレオ / 20 ms) で符号化し、Audio Config (0x0F) に OpusHead を載せる

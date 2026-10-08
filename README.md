@@ -32,9 +32,9 @@ WebRTC シグナリングサーバー [Ayame](https://github.com/OpenAyame/ayame
 
 WebRTC SFU [Sora](https://sora.shiguredo.jp) に対応したモードです。
 
-### Sora MOQT モード
+### MOQT モード (momo-moq)
 
-MOQT (Media over QUIC Transport) の relay に接続するモードです。
+MOQT (Media over QUIC Transport) の relay に接続するモードです。`momo` とは別の `momo-moq` バイナリとしてビルドされます。
 
 ## 動作環境
 
@@ -54,6 +54,8 @@ Rust 1.98 以上が必要です（`Cargo.toml` の `rust-version` と合わせ�
 ```bash
 cargo build --release
 ```
+
+`momo` と `momo-moq` の両方がビルドされます。個別にビルドする場合は `-p shiguredo_momo` / `-p shiguredo_momo_moq` を指定してください。
 
 ## クロスコンパイル
 
@@ -160,19 +162,19 @@ container run --rm --cpus 8 --memory 16g \
 - `--data-channel-label LABELS`: 接続時に作成するデータチャネル（カンマ区切り、各ラベルは `#` 始まり）
 - `--forwarding-filter JSON`: 他参加者の映像・音声の受信を制御する転送フィルター（JSON 配列）
 
-### Sora MOQT モード
+### MOQT モード (momo-moq)
 
-MOQT (Media over QUIC Transport) の relay に接続し、トラックを publish または subscribe します。`moq` feature が必要です。
+MOQT (Media over QUIC Transport) の relay に接続し、トラックを publish または subscribe します。
 
 ```bash
-cargo build --release --features moq
+cargo build --release -p shiguredo_momo_moq
 ```
 
-publish する映像の符号化と、subscribe した映像の復号には OpenH264 ライブラリが必要です。`--openh264` にライブラリのパスを指定してください。subscribe は raw_player で映像を表示し音声を再生するため、`moq` feature は `player` を一緒に有効化します。
+publish する映像の符号化と、subscribe した映像の復号には OpenH264 ライブラリが必要です。`--openh264` にライブラリのパスを指定してください。subscribe は raw_player で映像を表示し音声を再生します。
 
 ```bash
 # カメラとマイクのトラックを publish する
-./momo sora-moq publish \
+./momo-moq publish \
   --url moqt://example.com:4433/live \
   --namespace your-namespace \
   --video-bit-rate 2000 \
@@ -180,21 +182,40 @@ publish する映像の符号化と、subscribe した映像の復号には Open
   --openh264 /path/to/libopenh264.so
 
 # カタログからトラックを見つけて subscribe し、映像と音声を再生する
-./momo sora-moq subscribe \
+./momo-moq subscribe \
   --url moqt://example.com:4433/live \
   --namespace your-namespace \
   --openh264 /path/to/libopenh264.so
 ```
 
-**オプション:**
+**サブコマンド:**
+
+- `publish`: 映像と音声のトラックを publish する
+- `subscribe`: カタログからトラックを見つけて subscribe し、映像を表示して音声を再生する
+
+**publish / subscribe 共通のオプション:**
 
 - `--url URL`: MOQT relay の URL（`moqt://host:port/path` 形式。必須）
 - `--namespace NAMESPACE`: Track Namespace（必須）
+- `--resolution RESOLUTION`: 解像度（QVGA、VGA、HD、FHD、4K、または `WIDTHxHEIGHT`。デフォルト: VGA）
+- `--framerate FRAMERATE`: フレームレート（1-120。デフォルト: 30）
+- `--video-input-device DEVICE`: 映像デバイスを名前またはインデックスで指定
+- `--audio-input-device DEVICE`: 音声入力デバイスを名前、インデックス、unique_id で指定
+- `--no-video-input-device`: 映像トラックを publish しない
+- `--no-audio-device`: 音声トラックを publish しない
+- `--fake-capture-device`: フェイク映像と音声のキャプチャデバイスを使用する
+- `--insecure`: サーバー証明書の検証をスキップする
+- `--cacert PATH`: CA 証明書ファイルを PEM 形式で指定する
+- `--openh264 PATH`: OpenH264 ライブラリのパスを指定する
+- `--log-level LEVEL`: ログ出力レベル（verbose、info、warning、error、none。デフォルト: info）
+
+**publish のみのオプション:**
+
 - `--video-bit-rate KBPS`: 映像ビットレート（1〜30000。映像を publish する場合は必須）
 - `--audio-bit-rate KBPS`: 音声ビットレート（1〜510。音声を publish する場合は必須）
 - `--video-keyframe-interval FRAMES`: キーフレーム間隔（フレーム数。デフォルト: 60）
 
-`--no-video-input-device` / `--no-audio-device` は publish するトラックを無効化します。両方を指定すると publish するトラックが無くなるためエラーになります。TLS は既存の `--insecure` / `--cacert` を使います（両方指定時は `--insecure` を優先）。
+`--no-video-input-device` / `--no-audio-device` は publish するトラックを無効化します。両方を指定すると publish するトラックが無くなるためエラーになります。TLS は `--insecure` / `--cacert` を使います（両方指定時は `--insecure` を優先）。デバイス一覧は `./momo --list-devices` で確認できます。
 
 **実装状況:**
 

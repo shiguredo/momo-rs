@@ -7,7 +7,7 @@
 use bytes::Bytes;
 use shiguredo_moqt::session::types::RequestStreamEnd;
 
-use crate::moq::error::MoqError;
+use crate::error::MoqError;
 
 /// 受信ストリームから取り出した 1 要素
 pub enum RecvChunk {

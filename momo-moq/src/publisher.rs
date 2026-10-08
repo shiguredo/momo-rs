@@ -1,6 +1,6 @@
-//! sora-moq の publisher
+//! MOQT の publisher
 //!
-//! `momo sora-moq publish` の実装。映像 (H.264 / avc1) と音声 (Opus) をキャプチャして
+//! `momo-moq publish` の実装。映像 (H.264 / avc1) と音声 (Opus) をキャプチャして
 //! エンコードし、MSF カタログとともに MOQT relay へ publish する。
 //! payload は 4 バイト長プレフィックス形式、パラメーターセットは Video Config (0x0D) に
 //! 載せる (draft-ietf-moq-loc-04 §2.1.3 / §2.1.2)。draft 由来のため将来の改版で
@@ -26,17 +26,17 @@ use shiguredo_openh264::{EncodeOptions, Encoder, EncoderConfig, FrameType};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
+use crate::catalog::{self, AudioTrackSpec, VideoTrackSpec};
+use crate::client::{ClientEvent, DataPlaneHandle, MoqtClient, ObjectFilterOutcome};
+use crate::config::{MoqCommonConfig, MoqConfig};
 use crate::error::BoxError;
-use crate::moq::catalog::{self, AudioTrackSpec, VideoTrackSpec};
-use crate::moq::client::{ClientEvent, DataPlaneHandle, MoqtClient, ObjectFilterOutcome};
-use crate::moq::config::{MoqCommonConfig, MoqConfig};
-use crate::moq::error::MoqError;
-use crate::moq::h264;
-use crate::moq::media::{self, CapturedAudioFrame, CapturedVideoFrame};
-use crate::moq::opus::{self, OpusEncoder};
-use crate::moq::quic;
-use crate::moq::transport::{SendStream, StreamHandle};
-use crate::moq::url::ServerUrl;
+use crate::error::MoqError;
+use crate::h264;
+use crate::media::{self, CapturedAudioFrame, CapturedVideoFrame};
+use crate::opus::{self, OpusEncoder};
+use crate::quic;
+use crate::transport::{SendStream, StreamHandle};
+use crate::url::ServerUrl;
 
 /// 映像トラックの Track Alias
 const VIDEO_TRACK_ALIAS: u64 = 1;
@@ -778,7 +778,7 @@ impl Publisher {
     /// peer (relay) からの要求に応答する
     async fn serve_request(
         &mut self,
-        request: crate::moq::client::IncomingRequest,
+        request: crate::client::IncomingRequest,
     ) -> Result<(), BoxError> {
         match request.message {
             ControlMessage::Subscribe(subscribe) => {
@@ -905,7 +905,7 @@ impl Publisher {
     }
 }
 
-/// `momo sora-moq publish` を実行する
+/// `momo-moq publish` を実行する
 pub async fn run(config: MoqConfig, common: MoqCommonConfig) -> Result<(), BoxError> {
     let mut publisher = Publisher::connect(config, common).await?;
 

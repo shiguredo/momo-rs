@@ -1,14 +1,14 @@
-//! MOQT (Media over QUIC Transport) モードの CLI
+//! MOQT (Media over QUIC Transport) の CLI
 //!
-//! `momo sora-moq publish` / `momo sora-moq subscribe` のサブコマンドを提供する。
+//! `momo-moq publish` / `momo-moq subscribe` のサブコマンドを提供する。
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
 
-use crate::moq::config::{DEFAULT_VIDEO_KEYFRAME_INTERVAL, MoqCommonConfig, MoqConfig, MoqRole};
-use crate::moq::{publisher, subscriber};
+use crate::config::{DEFAULT_VIDEO_KEYFRAME_INTERVAL, MoqCommonConfig, MoqConfig, MoqRole};
+use crate::{publisher, subscriber};
 
-/// `momo sora-moq` サブコマンドを実行する
+/// `momo-moq` のサブコマンドを実行する
 ///
 /// 第 1 サブコマンドで役割 (publish / subscribe) を選ぶ。
 pub async fn run(mut args: noargs::RawArgs, common: MoqCommonConfig) -> noargs::Result<()> {
@@ -32,7 +32,7 @@ pub async fn run(mut args: noargs::RawArgs, common: MoqCommonConfig) -> noargs::
     } else {
         Err(noargs::Error::other(
             &noargs::raw_args(),
-            "sora-moq mode requires a subcommand: publish or subscribe",
+            "momo-moq requires a subcommand: publish or subscribe",
         ))
     }
 }
@@ -57,24 +57,7 @@ fn validate(config: &MoqConfig) -> noargs::Result<()> {
         .map_err(|e| noargs::Error::other(&noargs::raw_args(), e))
 }
 
-/// `--video` / `--audio` を読み捨てる
-///
-/// sora-moq ではトラックの有無を `--no-video-input-device` / `--no-audio-device` で
-/// 決めるため、Sora モードの `--video` / `--audio` は指定されても無視する。
-fn take_ignored_track_options(args: &mut noargs::RawArgs) {
-    let _ = noargs::opt("video")
-        .ty("BOOL")
-        .doc("Ignored in sora-moq mode")
-        .take(args)
-        .present();
-    let _ = noargs::opt("audio")
-        .ty("BOOL")
-        .doc("Ignored in sora-moq mode")
-        .take(args)
-        .present();
-}
-
-/// `momo sora-moq publish` を実行する
+/// `momo-moq publish` を実行する
 async fn run_publish(mut args: noargs::RawArgs, common: MoqCommonConfig) -> noargs::Result<()> {
     noargs::HELP_FLAG.take_help(&mut args);
 
@@ -112,7 +95,6 @@ async fn run_publish(mut args: noargs::RawArgs, common: MoqCommonConfig) -> noar
         .take(&mut args)
         .present()
         .map(|o| o.value().to_owned());
-    take_ignored_track_options(&mut args);
 
     if let Some(help) = args.finish()? {
         print!("{}", help);
@@ -137,7 +119,7 @@ async fn run_publish(mut args: noargs::RawArgs, common: MoqCommonConfig) -> noar
         .map_err(|e| noargs::Error::other(&noargs::raw_args(), e.to_string()))
 }
 
-/// `momo sora-moq subscribe` を実行する
+/// `momo-moq subscribe` を実行する
 async fn run_subscribe(mut args: noargs::RawArgs, common: MoqCommonConfig) -> noargs::Result<()> {
     noargs::HELP_FLAG.take_help(&mut args);
 
@@ -153,7 +135,6 @@ async fn run_subscribe(mut args: noargs::RawArgs, common: MoqCommonConfig) -> no
         .take(&mut args)
         .present()
         .map(|o| o.value().to_owned());
-    take_ignored_track_options(&mut args);
 
     if let Some(help) = args.finish()? {
         print!("{}", help);
@@ -208,7 +189,7 @@ async fn run_subscribe(mut args: noargs::RawArgs, common: MoqCommonConfig) -> no
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::moq::config::{MAX_VIDEO_BIT_RATE, MIN_VIDEO_BIT_RATE};
+    use crate::config::{MAX_VIDEO_BIT_RATE, MIN_VIDEO_BIT_RATE};
 
     /// 映像ビットレートが範囲外の場合にエラーになること
     #[test]
