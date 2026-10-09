@@ -6,6 +6,7 @@ momo (C++) と同じく、接続に失敗してもプロセスを終了させず
 """
 
 import pytest
+
 from momo import Momo, MomoMode, read_log
 
 

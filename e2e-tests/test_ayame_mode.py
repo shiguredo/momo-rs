@@ -4,6 +4,7 @@ import uuid
 from typing import Any, cast
 
 import pytest
+
 from momo import Momo, MomoCodecParams, MomoMode, find_stats
 
 AYAME_SIGNALING_URL = "wss://ayame-labo.shiguredo.app/signaling"

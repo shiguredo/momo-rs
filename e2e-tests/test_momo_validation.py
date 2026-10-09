@@ -3,6 +3,7 @@
 import subprocess
 
 import pytest
+
 from momo import Momo, MomoMode
 
 
