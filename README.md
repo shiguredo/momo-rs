@@ -17,24 +17,12 @@ Please read <https://github.com/shiguredo/oss> before use.
 
 WebRTC Native Client Momo の Rust 実装です。libwebrtc を利用し、ブラウザなしで動作する WebRTC ネイティブクライアントです。
 
-## モード
+本リポジトリは次の 2 つのバイナリをビルドします。
 
-### P2P モード
-
-Momo 自体がシグナリングサーバーと HTTP サーバーを持っているため、完全な P2P モードでの利用ができます。
-ブラウザから Momo にアクセスするだけで利用できます。
-
-### Ayame モード
-
-WebRTC シグナリングサーバー [Ayame](https://github.com/OpenAyame/ayame) に対応したモードです。
-
-### Sora モード
-
-WebRTC SFU [Sora](https://sora.shiguredo.jp) に対応したモードです。
-
-### MOQT モード (momo-moq)
-
-MOQT (Media over QUIC Transport) の relay に接続するモードです。`momo` とは別の `momo-moq` バイナリとしてビルドされます。
+| バイナリ | 用途 |
+|---|---|
+| `momo` | WebRTC クライアント。P2P モード / Ayame モード / Sora モード |
+| `momo-moq` | MOQT (Media over QUIC Transport) クライアント。publish / subscribe |
 
 ## 動作環境
 
@@ -46,6 +34,9 @@ MOQT (Media over QUIC Transport) の relay に接続するモードです。`mom
 | Ubuntu 22.04 | x86_64 | ネイティブ |
 | Ubuntu 24.04 | arm64 | クロスコンパイル |
 | Ubuntu 22.04 | arm64 | クロスコンパイル |
+| Raspberry Pi OS (trixie) | arm64 | クロスコンパイル |
+
+`momo-moq` は macOS と Linux で動作します。Windows は `shiguredo_opus` の prebuilt が未対応のため、`momo-moq` をビルドできません。
 
 ## ビルド
 
@@ -98,13 +89,15 @@ container run --rm --cpus 8 --memory 16g \
 
 ### デバイス一覧の取得
 
-利用可能な映像入力・音声入力デバイスを JSON 形式で表示します。
+利用可能な映像入力・音声入力デバイスを JSON 形式で表示します。`momo-moq` のデバイス指定にもこの一覧を使います。
 
 ```bash
 ./momo --list-devices
 ```
 
 ### P2P モード
+
+Momo 自体がシグナリングサーバーと HTTP サーバーを持っているため、完全な P2P モードでの利用ができます。ブラウザから Momo にアクセスするだけで利用できます。
 
 ```bash
 ./momo p2p --port 8080 --document-root html
@@ -116,8 +109,12 @@ container run --rm --cpus 8 --memory 16g \
 
 - `--port PORT`: リッスンポート（デフォルト: 8080）
 - `--document-root PATH`: HTTP ドキュメントルートディレクトリ（デフォルト: html）
+- `--video-codec-type TYPE`: 映像コーデック（VP8 / VP9 / AV1 / H264 / H265）
+- `--audio-codec-type TYPE`: 音声コーデック（OPUS / PCMU / PCMA）
 
 ### Ayame モード
+
+WebRTC シグナリングサーバー [Ayame](https://github.com/OpenAyame/ayame) に対応したモードです。
 
 ```bash
 ./momo ayame \
@@ -132,8 +129,12 @@ container run --rm --cpus 8 --memory 16g \
 - `--client-id ID`: クライアント ID（任意）
 - `--signaling-key KEY`: シグナリングキー（任意）
 - `--direction DIRECTION`: 送受信方向（sendrecv / sendonly / recvonly、デフォルト: sendrecv）
+- `--video-codec-type TYPE`: 映像コーデック（VP8 / VP9 / AV1 / H264 / H265）
+- `--audio-codec-type TYPE`: 音声コーデック（OPUS / PCMU / PCMA）
 
 ### Sora モード
+
+WebRTC SFU [Sora](https://sora.shiguredo.jp) に対応したモードです。
 
 ```bash
 ./momo sora \
@@ -146,15 +147,20 @@ container run --rm --cpus 8 --memory 16g \
 
 - `--signaling-urls URLS`: シグナリング URL（カンマ区切りで複数指定可）
 - `--channel-id ID`: チャネル ID
-- `--role ROLE`: ロール（sendonly / recvonly / sendrecv、デフォルト: sendonly）
+- `--auto`: SoraServer の自動接続用（未実装。指定しても動作しない）
 - `--video BOOL`: 映像送信（デフォルト: true）
 - `--audio BOOL`: 音声送信（デフォルト: true）
 - `--video-codec-type TYPE`: 映像コーデック（VP8 / VP9 / AV1 / H264 / H265）
 - `--audio-codec-type TYPE`: 音声コーデック（OPUS）
 - `--video-bit-rate RATE`: 映像ビットレート（デフォルト: 0）
 - `--audio-bit-rate RATE`: 音声ビットレート（デフォルト: 0）
+- `--role ROLE`: ロール（sendonly / recvonly / sendrecv、デフォルト: sendonly）
 - `--spotlight BOOL`: スポットライト（デフォルト: false）
 - `--simulcast BOOL`: サイマルキャスト（デフォルト: false）
+- `--data-channel-signaling BOOL`: DataChannel シグナリングを使う（デフォルト: 未指定）
+- `--data-channel-signaling-timeout SECONDS`: DataChannel シグナリングのタイムアウト（デフォルト: 180）
+- `--ignore-disconnect-websocket BOOL`: DataChannel 利用時の WebSocket 切断を無視する（デフォルト: 未指定）
+- `--disconnect-wait-timeout SECONDS`: DataChannel の切断待ちタイムアウト（デフォルト: 5）
 - `--metadata JSON`: connect メッセージに含めるメタデータ
 - `--client-id ID`: Sora に送信するクライアント ID（1〜255 バイト）
 - `--bundle-id ID`: Sora に送信するバンドル ID（1〜255 バイト）
@@ -164,7 +170,7 @@ container run --rm --cpus 8 --memory 16g \
 
 ### MOQT モード (momo-moq)
 
-MOQT (Media over QUIC Transport) の relay に接続し、トラックを publish または subscribe します。
+MOQT (Media over QUIC Transport) の relay に接続し、トラックを publish または subscribe します。`momo` とは別の `momo-moq` バイナリで実行します。
 
 ```bash
 cargo build --release -p shiguredo_momo_moq
@@ -215,7 +221,7 @@ publish する映像の符号化と、subscribe した映像の復号には Open
 - `--audio-bit-rate KBPS`: 音声ビットレート（1〜510。音声を publish する場合は必須）
 - `--video-keyframe-interval FRAMES`: キーフレーム間隔（フレーム数。デフォルト: 60）
 
-`--no-video-input-device` / `--no-audio-device` は publish するトラックを無効化します。両方を指定すると publish するトラックが無くなるためエラーになります。TLS は `--insecure` / `--cacert` を使います（両方指定時は `--insecure` を優先）。デバイス一覧は `./momo --list-devices` で確認できます。
+`--no-video-input-device` / `--no-audio-device` は publish するトラックを無効化します。両方を指定すると publish するトラックが無くなるためエラーになります。TLS は `--insecure` / `--cacert` を使います（両方指定時は `--insecure` を優先）。
 
 **実装状況:**
 
@@ -232,8 +238,6 @@ Sora で受信した映像 (recvonly / sendrecv) を SDL3 ウィンドウにグ�
 ```bash
 cargo build --release
 ```
-
-`player` feature はデフォルトで有効です。
 
 **使い方:**
 
@@ -252,7 +256,7 @@ cargo build --release
 
 ウィンドウを閉じると表示を終了し、再接続も停止します。
 
-### グローバルオプション
+### momo のグローバルオプション
 
 #### デバイス
 
@@ -274,10 +278,28 @@ cargo build --release
 |---|---|
 | `--resolution RESOLUTION` | 解像度（QVGA、VGA、HD、FHD、4K、または `WIDTHxHEIGHT`。デフォルト: VGA） |
 | `--framerate FRAMERATE` | フレームレート（1-120。デフォルト: 30） |
-| `--degradation-preference PREFERENCE` | 劣化時に維持する品質（balanced、maintain-framerate、maintain-resolution） |
+| `--degradation-preference PREFERENCE` | 劣化時に維持する品質（balanced、maintain-framerate、maintain-resolution。Sora モードでは指定不可） |
 | `--window-width WIDTH` | 映像ウィンドウ幅（`player` feature が必要。デフォルト: 640） |
 | `--window-height HEIGHT` | 映像ウィンドウ高さ（`player` feature が必要。デフォルト: 480） |
 | `--fullscreen` | 映像を全画面表示する（`player` feature が必要） |
+
+#### libcamera (Raspberry Pi)
+
+| オプション | 説明 |
+|---|---|
+| `--use-libcamera` | libcamera 経由で映像をキャプチャする |
+| `--use-libcamera-native` | H.264 エンコードにネイティブ DMA-BUF バッファを使う（`--use-libcamera` と `--use-v4l2-encoder` が必要） |
+| `--libcamera-control KEY=VALUE` | libcamera のコントロールを設定する（複数回指定可） |
+| `--use-v4l2-encoder` | V4L2 ハードウェア H.264 エンコーダーを使う |
+
+#### 音声
+
+| オプション | 説明 |
+|---|---|
+| `--disable-echo-cancellation` | エコーキャンセルを無効にする |
+| `--disable-auto-gain-control` | 自動ゲイン制御を無効にする |
+| `--disable-noise-suppression` | ノイズ抑制を無効にする |
+| `--disable-highpass-filter` | ハイパスフィルターを無効にする |
 
 #### TLS
 
@@ -286,6 +308,14 @@ cargo build --release
 | `--insecure` | サーバー証明書の検証をスキップする |
 | `--cacert PATH` | CA 証明書ファイルを PEM 形式で指定する |
 | `--client-cert PATH` / `--client-key PATH` | クライアント証明書と秘密鍵を指定する（同時指定が必要） |
+
+#### プロキシ (Sora モードのみ)
+
+| オプション | 説明 |
+|---|---|
+| `--proxy-url URL` | プロキシ URL |
+| `--proxy-username USER` | プロキシ認証ユーザー名 |
+| `--proxy-password PASS` | プロキシ認証パスワード |
 
 #### ログとメトリクス
 
@@ -302,6 +332,7 @@ cargo build --release
 | `--openh264 PATH` | OpenH264 ライブラリのパスを指定する |
 | `--h264-encoder TYPE` / `--h264-decoder TYPE` | H.264 のエンコーダーとデコーダーを指定する |
 | `--h265-encoder TYPE` / `--h265-decoder TYPE` | H.265 のエンコーダーとデコーダーを指定する |
+| `--vp8-encoder TYPE` / `--vp8-decoder TYPE` | VP8 のエンコーダーとデコーダーを指定する |
 | `--vp9-encoder TYPE` / `--vp9-decoder TYPE` | VP9 のエンコーダーとデコーダーを指定する |
 | `--av1-encoder TYPE` / `--av1-decoder TYPE` | AV1 のエンコーダーとデコーダーを指定する |
 
@@ -321,6 +352,7 @@ cargo build --release
 | 機能 | 説明 |
 |---|---|
 | `--cacert` | CA 証明書ファイルを PEM 形式で指定。momo にはないオプション |
+| `momo-moq` | MOQT relay へ publish / subscribe する独立したバイナリ。momo にはない |
 
 ### 仕様の違い
 
