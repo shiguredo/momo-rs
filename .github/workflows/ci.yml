@@ -163,12 +163,11 @@ jobs:
       - name: Add Rust target
         run: rustup target add x86_64-pc-windows-msvc
       - name: Clippy
-        # momo-moq は shiguredo_opus の Windows prebuilt が未対応のため momo だけを検証する
-        run: cargo clippy -p shiguredo_momo -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
       - name: Build
-        run: cargo build -p shiguredo_momo
+        run: cargo build --workspace
       - name: Test
-        run: cargo test -p shiguredo_momo
+        run: cargo test --workspace
       - name: Upload binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

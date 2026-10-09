@@ -36,8 +36,6 @@ WebRTC Native Client Momo の Rust 実装です。libwebrtc を利用し、ブ�
 | Ubuntu 22.04 | arm64 | クロスコンパイル |
 | Raspberry Pi OS (trixie) | arm64 | クロスコンパイル |
 
-`momo-moq` は macOS と Linux で動作します。Windows は `shiguredo_opus` の prebuilt が未対応のため、`momo-moq` をビルドできません。
-
 ## ビルド
 
 Rust 1.99 以上が必要です（`Cargo.toml` の `rust-version` と合わせています）。
