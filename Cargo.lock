@@ -82,13 +82,32 @@ dependencies = [
  "clang-sys",
  "itertools",
  "log",
- "prettyplease",
+ "prettyplease 0.2.37",
  "proc-macro2",
  "quote",
  "regex",
  "rustc-hash",
  "shlex 1.3.0",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "bindgen"
+version = "0.73.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc28bda9791f9d907d05b23533298ba26af0e9e75c3f32044569707afbca17e0"
+dependencies = [
+ "bitflags 2.13.1",
+ "cexpr",
+ "clang-sys",
+ "log",
+ "prettyplease 0.3.0",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex 2.0.1",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -849,6 +868,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettyplease"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
+dependencies = [
+ "proc-macro2",
+ "syn 3.0.5",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -908,7 +937,7 @@ version = "2026.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb965dfbf440afb6ea2315bf3cd5e0a5b28f6375a8cce9f02f1296c89d1caf07"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "shiguredo_cmake",
  "shiguredo_toml",
 ]
@@ -1277,7 +1306,7 @@ version = "2026.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93ba1bd91dcf5c7191c2c98479392e20817063d351cf8ac8c6f977780f2ca5ae"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "log",
  "shiguredo_toml",
 ]
@@ -1288,7 +1317,7 @@ version = "2026.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a36df0bc1ea28e9c5399a10f9b1b2f99243ebe1d0a0ab6871f9dbdaf2667dc2"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "cc",
  "pkg-config",
  "windows",
@@ -1316,7 +1345,7 @@ version = "2026.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71876728ceaf92451cd983c0560616be3a720d92b5e300e3fdecd37bd98b5483"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "cc",
  "pkg-config",
 ]
@@ -1394,7 +1423,7 @@ version = "2026.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab3b51ad8dee83d36d84d7f4c8bddb529523143b3303ff8d861829360cd1462a"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "shiguredo_toml",
 ]
 
@@ -1404,17 +1433,18 @@ version = "2026.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4a52b63138f4f927e7f5adc3b9f3a7b57dfacd53277aa2d1f2c66020a12338d"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "shiguredo_toml",
 ]
 
 [[package]]
 name = "shiguredo_opus"
-version = "2026.2.0"
+version = "2026.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3064a246b3e243aee5cacb327400754d7c0ce7a74244c3a524afe4d59d9553a9"
+checksum = "fab10639b6e60946abde58729affb06e67c9e802cd98b86b8c36bd4a87993cdb"
 dependencies = [
- "bindgen",
+ "bindgen 0.73.0",
+ "cc",
  "shiguredo_cmake",
  "shiguredo_toml",
 ]
@@ -1440,7 +1470,7 @@ version = "2026.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "036395176796d6528786412e1ffc643d7c2679a26252f314b7d07d3c365f245d"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "cc",
  "pkg-config",
  "windows",
@@ -1452,7 +1482,7 @@ version = "2026.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9035e2f7d38c5a6ddcb69dc00b666b43e17ef6bab1546959dc44f7137c7ac79"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "shiguredo_cmake",
  "shiguredo_toml",
 ]
@@ -1463,7 +1493,7 @@ version = "0.152.1-canary.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46fda0501e3a1edb96651f2dce17cbc14b182b1a08384c0e85587383f865c38e"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "nojson",
  "shiguredo_cmake",
  "shiguredo_toml",

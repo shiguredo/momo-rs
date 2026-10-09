@@ -27,7 +27,9 @@ shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "6c3ab63e
 # OpenH264 エンコーダー・デコーダー
 shiguredo_openh264 = "2026.2"
 # Opus エンコーダー・デコーダー
-shiguredo_opus = "2026.2"
+# bindgen 0.73.1 以降は syn / prettyplease の要求範囲が広く、bindgen 0.72 系と同居させると
+# syn 3 と prettyplease 0.2 の組み合わせになりビルドできない。Cargo.lock では bindgen 0.73.0 に固定する
+shiguredo_opus = "2026.4"
 # 映像入力デバイス (VideoCapture)
 shiguredo_video_device = "2026.3"
 # WebRTC 本体 (PeerConnection / トラック / RTP コーデック等)
