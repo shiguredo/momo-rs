@@ -63,7 +63,9 @@ tracing-subscriber.workspace = true
 # 時雨堂クレート
 
 # libcamera 経由の映像キャプチャ (Raspberry Pi)
-shiguredo_libcamera = { version = "2026.1", optional = true }
+# Raspberry Pi OS (trixie) の libcamera が 0.7 系になり、公開ヘッダーが C++20 と std::span を要求するため
+# libcamera 0.7 対応版のプレリリースに固定する。2026.1 系は C++17 でビルドしておりコンパイルできない
+shiguredo_libcamera = { version = "2026.2.0-canary.0", optional = true }
 # V4L2 M2M ハードウェア H.264 エンコーダー (Raspberry Pi)
 # 2026.2.0 安定版に FnEncodeHandler 併用の H264Encoder が含まれるため canary 固定を解除する
 shiguredo_v4l2 = { version = "2026.2", optional = true }
