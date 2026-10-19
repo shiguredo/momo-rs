@@ -82,7 +82,7 @@ def test_ayame_reconnects_after_peer_leaves(free_port, port_allocator, tmp_path)
 
         deadline = time.time() + 60
         while time.time() < deadline:
-            if "bye 受信" in read_log(log_path):
+            if "received bye" in read_log(log_path):
                 break
             time.sleep(1)
         else:
@@ -90,7 +90,7 @@ def test_ayame_reconnects_after_peer_leaves(free_port, port_allocator, tmp_path)
 
         deadline = time.time() + 30
         while time.time() < deadline:
-            if read_log(log_path).count("accept 受信") >= 2:
+            if read_log(log_path).count("received accept") >= 2:
                 break
             time.sleep(1)
         else:
