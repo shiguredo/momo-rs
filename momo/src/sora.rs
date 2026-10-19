@@ -37,32 +37,71 @@ use event_handler::SoraEventHandler;
 
 // ─── 設定 ─────────────────────────────────────────────────────────────────────
 
-// 映像入力デバイスや HW エンコーダー選択の各項目は、対応 feature を有効化したビルドでのみ
-// 読み出される。このターゲット / feature 組み合わせでは未読の項目が残るため、
-// デッドコード警告を抑制する。
-#[expect(dead_code, reason = "feature 組み合わせによって未読の項目が残る")]
 pub struct SoraConfig {
+    /// Sora のシグナリング URL (`--signaling-url`、複数指定可)
     pub signaling_urls: Vec<String>,
     pub channel_id: String,
+    /// Sora のロール (sendrecv / sendonly / recvonly)
     pub role: Role,
+    /// 映像を送受信するか (`--video` / `--no-video`)
     pub video: bool,
+    /// 音声を送受信するか (`--audio` / `--no-audio`)
     pub audio: bool,
+    /// 映像コーデック種別の指定 (`--video-codec-type`)
     pub video_codec_type: Option<String>,
+    /// 音声コーデック種別の指定 (`--audio-codec-type`)
     pub audio_codec_type: Option<String>,
+    /// 映像のビットレート (bps)
     pub video_bit_rate: u32,
+    /// 音声のビットレート (bps)
     pub audio_bit_rate: u32,
+    /// H.264 エンコーダー名の指定 (`--h264-encoder`)
     pub h264_encoder: Option<String>,
+    /// H.264 デコーダー名の指定 (`--h264-decoder`)
     pub h264_decoder: Option<String>,
+    /// H.265 エンコーダー名の指定 (`--h265-encoder`)
     pub h265_encoder: Option<String>,
+    /// H.265 デコーダー名の指定 (`--h265-decoder`)
     pub h265_decoder: Option<String>,
+    /// VP9 エンコーダー名の指定 (`--vp9-encoder`)
+    #[cfg_attr(
+        not(feature = "vpl"),
+        expect(dead_code, reason = "vpl feature が無効なビルドでは読まない")
+    )]
     pub vp9_encoder: Option<String>,
+    /// VP9 デコーダー名の指定 (`--vp9-decoder`)
+    #[cfg_attr(
+        not(feature = "vpl"),
+        expect(dead_code, reason = "vpl feature が無効なビルドでは読まない")
+    )]
     pub vp9_decoder: Option<String>,
+    /// AV1 エンコーダー名の指定 (`--av1-encoder`)
+    #[cfg_attr(
+        not(any(feature = "nvcodec", feature = "vpl", feature = "amf")),
+        expect(
+            dead_code,
+            reason = "nvcodec / vpl / amf feature がすべて無効なビルドでは読まない"
+        )
+    )]
     pub av1_encoder: Option<String>,
+    /// AV1 デコーダー名の指定 (`--av1-decoder`)
+    #[cfg_attr(
+        not(any(feature = "nvcodec", feature = "vpl", feature = "amf")),
+        expect(
+            dead_code,
+            reason = "nvcodec / vpl / amf feature がすべて無効なビルドでは読まない"
+        )
+    )]
     pub av1_decoder: Option<String>,
+    /// スポットライト機能を使うか (`--spotlight`)
     pub spotlight: bool,
+    /// サイマルキャストを使うか (`--simulcast`)
     pub simulcast: bool,
+    /// DataChannel シグナリングの要否 (`None` なら Sora の既定に従う)
     pub data_channel_signaling: Option<bool>,
+    /// WebSocket 切断時に DataChannel を維持するか (`None` なら Sora の既定に従う)
     pub ignore_disconnect_websocket: Option<bool>,
+    /// クライアントメタデータの JSON 文字列 (`--metadata`)
     pub metadata: Option<String>,
     /// `--client-id` で指定された Sora に送信するクライアント ID
     pub client_id: Option<String>,
@@ -74,23 +113,47 @@ pub struct SoraConfig {
     pub data_channel_labels: Vec<String>,
     /// `--forwarding-filter` で指定された転送フィルターの JSON 文字列
     pub forwarding_filters: Option<String>,
+    /// 音声デバイスを使わない (`--no-audio-device`)
     pub no_audio_device: bool,
+    /// 映像入力デバイスを使わない (`--no-video-input-device`)
     pub no_video_input_device: bool,
+    /// 実デバイスの代わりにフェイクのキャプチャを使う (`--fake-capture-device`)
     pub fake_capture_device: bool,
+    /// V4L2 M2M のハードウェア H.264 エンコーダーを使う (`--use-v4l2-encoder`、Raspberry Pi feature のみ)
     pub use_v4l2_encoder: bool,
+    /// 読み込み済みの OpenH264 ライブラリ (`--openh264` 指定時のみ `Some`)
     pub openh264_lib: Option<shiguredo_openh264::Openh264Library>,
+    /// libcamera でキャプチャする (`--use-libcamera`、Raspberry Pi feature のみ)
     pub use_libcamera: bool,
+    /// libcamera の DMA-BUF を V4L2 エンコーダーへ直接渡す (`--use-libcamera-native`)
+    #[cfg_attr(
+        not(feature = "raspberrypi"),
+        expect(dead_code, reason = "raspberrypi feature が無効なビルドでは読まない")
+    )]
     pub use_libcamera_native: bool,
+    /// libcamera のコントロール設定 (`--libcamera-control` のキーと値)
+    #[cfg_attr(
+        not(feature = "raspberrypi"),
+        expect(dead_code, reason = "raspberrypi feature が無効なビルドでは読まない")
+    )]
     pub libcamera_controls: Vec<(String, String)>,
+    /// 映像入力デバイスの指定 (`--video-input-device`、インデックス番号かデバイス名)
     pub video_input_device: Option<String>,
+    /// 音声入力デバイスの指定 (`--audio-input-device`、インデックス番号かデバイス名)
     pub audio_input_device: Option<String>,
     /// `--audio-output-device` で指定されたデバイス (インデックス番号・デバイス名・unique_id)
     pub audio_output_device: Option<String>,
+    /// 映像の幅 (ピクセル)
     pub video_width: i32,
+    /// 映像の高さ (ピクセル)
     pub video_height: i32,
+    /// 映像のフレームレート (fps)
     pub framerate: u32,
+    /// 切断を検知してから終了するまで待つ秒数 (`--disconnect-wait-timeout`)
     pub disconnect_wait_timeout: u32,
+    /// サーバー証明書の検証を無効化する (`--insecure`)
     pub insecure: bool,
+    /// 映像入力のピクセル形式を固定する (`--force-i420` など。`None` なら自動選択)
     pub force_pixel_format: Option<shiguredo_video_device::PixelFormat>,
     /// クライアント証明書 (cert_pem, key_pem)
     pub client_cert: Option<(String, String)>,
@@ -118,11 +181,17 @@ const RECONNECT_BASE_SECONDS: u64 = 5;
 ///
 /// 何度再接続しても結果は変わらないので、デバイスを開く前に 1 回だけ作る。
 struct Prepared {
+    /// 送受信する映像の設定 (コーデックとビットレートを検証済み)
     video: Video,
+    /// 送受信する音声の設定 (コーデックとビットレートを検証済み)
     audio: Audio,
+    /// クライアントメタデータ (`--metadata` の JSON をパース済み)
     metadata: Option<JsonString>,
+    /// signaling notify 用メタデータ (`--signaling-notify-metadata` の JSON をパース済み)
     signaling_notify_metadata: Option<JsonString>,
+    /// 接続時に開く DataChannel の一覧 (`--data-channel-label`)
     data_channels: Vec<ConnectDataChannel>,
+    /// 接続時に送る転送フィルターの一覧 (`--forwarding-filter`)
     forwarding_filters: Vec<ForwardingFilter>,
 }
 
@@ -264,7 +333,6 @@ async fn connect(
 
     // ctx_config は Send を実装しないため、await をまたがないようブロックで囲む
     let context = {
-        #[allow(unused_mut)]
         let mut ctx_config = SoraConnectionContextConfig {
             adm_config,
             ..Default::default()
@@ -583,7 +651,7 @@ async fn connect(
         }
     } else {
         if config.no_video_input_device {
-            info!(target: "sora", "映像を無効化しました (--no-video-input-device)");
+            info!(target: "sora", "video disabled (--no-video-input-device)");
         }
         (None, None)
     };
@@ -784,7 +852,13 @@ fn apply_video_toolbox_preference(
 
 /// 指定されたコーデック方向・種別に対して、CLI で指定された実装名が
 /// `target` と一致した場合に VideoCodecPreference を設定する汎用ヘルパー
-#[expect(dead_code)]
+#[cfg_attr(
+    not(any(feature = "nvcodec", feature = "vpl", feature = "amf")),
+    expect(
+        dead_code,
+        reason = "nvcodec / vpl / amf feature がすべて無効なビルドでは呼ばない"
+    )
+)]
 fn apply_codec_preference(
     preference: &mut VideoCodecPreference,
     direction: CodecDirection,

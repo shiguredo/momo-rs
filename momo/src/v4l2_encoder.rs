@@ -21,6 +21,11 @@ use tracing::{error, info, warn};
 
 use crate::libcamera::DmaBufMap;
 
+// Mutex が poison された状態はエンコーダーの状態が壊れていることを意味するため、
+// 握りつぶさずパニックさせて異常を明示する
+const SHARED_STATE_LOCK_POISONED: &str = "shared_state lock poisoned";
+const DMABUF_MAP_LOCK_POISONED: &str = "dmabuf_map lock poisoned";
+
 /// V4L2 H.264 エンコーダーファクトリ
 struct V4l2EncoderFactory {
     builtin_for_formats: VideoEncoderFactory,
@@ -154,7 +159,7 @@ fn handle_v4l2_encode_callback(
     codec_info.set_h264_idr_frame(encoded.is_keyframe());
 
     let callback = {
-        let guard = shared_state.lock().unwrap();
+        let guard = shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
         guard.callback
     };
     let Some(callback) = callback else {
@@ -226,7 +231,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
 
         match self.build_encoder() {
             Ok(encoder) => {
-                let mut guard = self.shared_state.lock().unwrap();
+                let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
                 guard.encoder = Some(encoder);
                 info!(target: "v4l2", "V4L2 H.264 encoder initialized");
                 VideoCodecStatus::Ok
@@ -254,7 +259,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
 
         // DmaBuf マップから DMA-BUF エントリを取得 (ネイティブモード)
         let dmabuf_entry = self.dmabuf_map.as_ref().and_then(|map| {
-            let mut guard = map.lock().unwrap();
+            let mut guard = map.lock().expect(DMABUF_MAP_LOCK_POISONED);
             guard.remove(&timestamp_us)
         });
 
@@ -271,7 +276,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
                 height: self.height,
                 dmabuf_done_tx: Some(done_tx),
             };
-            let mut guard = self.shared_state.lock().unwrap();
+            let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
             let Some(encoder) = guard.encoder.as_mut() else {
                 return VideoCodecStatus::Uninitialized;
             };
@@ -344,7 +349,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
             height: self.height,
             dmabuf_done_tx: None,
         };
-        let mut guard = self.shared_state.lock().unwrap();
+        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
         let Some(encoder) = guard.encoder.as_mut() else {
             return VideoCodecStatus::Uninitialized;
         };
@@ -367,14 +372,14 @@ impl VideoEncoderHandler for V4l2H264Encoder {
         &mut self,
         callback: Option<VideoEncoderEncodedImageCallbackRef<'_>>,
     ) -> VideoCodecStatus {
-        let mut guard = self.shared_state.lock().unwrap();
+        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
         guard.callback =
             callback.map(|cb| unsafe { VideoEncoderEncodedImageCallbackPtr::from_ref(cb) });
         VideoCodecStatus::Ok
     }
 
     fn release(&mut self) -> VideoCodecStatus {
-        let mut guard = self.shared_state.lock().unwrap();
+        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
         guard.encoder = None;
         guard.callback = None;
         info!(target: "v4l2", "V4L2 H.264 encoder released");
@@ -384,7 +389,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
     fn set_rates(&mut self, parameters: VideoEncoderRateControlParametersRef<'_>) {
         let bitrate_bps = parameters.target_bitrate_sum_bps();
         self.bitrate_bps = bitrate_bps;
-        let mut guard = self.shared_state.lock().unwrap();
+        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
         if let Some(ref mut encoder) = guard.encoder
             && let Err(e) = encoder.set_bitrate(bitrate_bps)
         {

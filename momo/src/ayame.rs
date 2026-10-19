@@ -26,47 +26,84 @@ use crate::error::BoxError;
 
 // ─── 設定 ─────────────────────────────────────────────────────────────────────
 
-#[allow(dead_code)]
 pub struct AyameConfig {
+    /// Ayame のシグナリング URL (`--signaling-url`)
     pub signaling_url: String,
+    /// Ayame のルーム ID (`--room-id`)
     pub room_id: String,
+    /// クライアント ID (`--client-id`。未指定なら起動時にランダム生成する)
     pub client_id: Option<String>,
+    /// Ayame のシグナリングキー (`--signaling-key`)
     pub signaling_key: Option<String>,
+    /// メディアの送受信方向 (`--direction`)
     pub direction: Direction,
+    /// Google の STUN サーバーを使わない (`--no-google-stun`)
     pub no_google_stun: bool,
+    /// 音声デバイスを使わない (`--no-audio-device`)
     pub no_audio_device: bool,
+    /// 映像入力デバイスを使わない (`--no-video-input-device`)
     pub no_video_input_device: bool,
+    /// 実デバイスの代わりにフェイクのキャプチャを使う (`--fake-capture-device`)
     pub fake_capture_device: bool,
+    /// libcamera でキャプチャする (`--use-libcamera`、Raspberry Pi feature のみ)
     pub use_libcamera: bool,
+    /// libcamera の DMA-BUF を V4L2 エンコーダーへ直接渡す (`--use-libcamera-native`)
+    #[cfg_attr(
+        not(feature = "raspberrypi"),
+        expect(dead_code, reason = "raspberrypi feature が無効なビルドでは読まない")
+    )]
     pub use_libcamera_native: bool,
+    /// libcamera のコントロール設定 (`--libcamera-control` のキーと値)
+    #[cfg_attr(
+        not(feature = "raspberrypi"),
+        expect(dead_code, reason = "raspberrypi feature が無効なビルドでは読まない")
+    )]
     pub libcamera_controls: Vec<(String, String)>,
+    /// V4L2 M2M のハードウェア H.264 エンコーダーを使う (`--use-v4l2-encoder`、Raspberry Pi feature のみ)
     pub use_v4l2_encoder: bool,
+    /// 読み込み済みの OpenH264 ライブラリ (`--openh264` 指定時のみ `Some`)
     pub openh264_lib: Option<shiguredo_openh264::Openh264Library>,
     /// `--{codec}-encoder` / `--{codec}-decoder` によるコーデック選択
     pub codec_selection: crate::video_codec_factory::CodecSelection,
+    /// 映像入力デバイスの指定 (`--video-input-device`、インデックス番号かデバイス名)
     pub video_input_device: Option<String>,
+    /// 音声入力デバイスの指定 (`--audio-input-device`、インデックス番号かデバイス名)
     pub audio_input_device: Option<String>,
     /// `--audio-output-device` で指定されたデバイス (インデックス番号・デバイス名・unique_id)
     pub audio_output_device: Option<String>,
+    /// 映像の幅 (ピクセル)
     pub video_width: i32,
+    /// 映像の高さ (ピクセル)
     pub video_height: i32,
+    /// 映像のフレームレート (fps)
     pub framerate: u32,
+    /// サーバー証明書の検証を無効化する (`--insecure`)
     pub insecure: bool,
+    /// 映像入力のピクセル形式を固定する (`--force-i420` など。`None` なら自動選択)
     pub force_pixel_format: Option<shiguredo_video_device::PixelFormat>,
     /// クライアント証明書 (cert_pem, key_pem)
     pub client_cert: Option<(String, String)>,
     /// CA 証明書 (PEM)
     pub ca_cert: Option<String>,
+    /// 映像劣化時に優先する品質 (`--degradation-preference`)
     pub degradation_preference: shiguredo_webrtc::DegradationPreference,
+    /// 映像コーデック種別の指定 (`--video-codec-type`)
     pub video_codec_type: Option<String>,
+    /// 音声コーデック種別の指定 (`--audio-codec-type`)
     pub audio_codec_type: Option<String>,
+    /// シリアル経由の DataChannel パススルー設定 (`--serial`)
     #[cfg(target_os = "linux")]
     pub serial: Option<crate::serial::SerialConfig>,
 }
 
+/// メディアの送受信方向
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
+    /// 送受信の両方を行う
     SendRecv,
+    /// 送信のみ行う
     SendOnly,
+    /// 受信のみ行う
     RecvOnly,
 }
 
@@ -100,7 +137,7 @@ pub async fn run(
     // クライアント ID (未指定時はランダム 8 バイトを hex 文字列に)
     let client_id = config.client_id.clone().unwrap_or_else(|| {
         let mut bytes = [0u8; 8];
-        aws_lc_rs::rand::fill(&mut bytes).expect("BUG: 乱数生成に失敗しました");
+        aws_lc_rs::rand::fill(&mut bytes).expect("BUG: filling random bytes must not fail");
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     });
 
@@ -196,7 +233,7 @@ async fn connect_once(
             return Attempt::ReconnectLater("予期しない通知を受信しました".into());
         }
     }
-    info!(target: "ayame", "WebSocket 接続完了");
+    info!(target: "ayame", "WebSocket connected");
     // ここから先は WebSocket を確立している
     let established = || Attempt::ReconnectNow;
 
@@ -213,7 +250,7 @@ async fn connect_once(
     {
         return established();
     }
-    info!(target: "ayame", room_id = %config.room_id, client_id = %client_id, "register 送信");
+    info!(target: "ayame", room_id = %config.room_id, client_id = %client_id, "register sent");
 
     // accept/reject 待ち
     let accept = loop {
@@ -233,7 +270,7 @@ async fn connect_once(
             _ => continue,
         }
     };
-    info!(target: "ayame", is_exist_user = accept.is_exist_user, "accept 受信");
+    info!(target: "ayame", is_exist_user = accept.is_exist_user, "received accept");
 
     // PeerConnection 作成
     let peer = match create_peer(
@@ -265,7 +302,7 @@ async fn connect_once(
             add_transceivers(
                 &peer.pc,
                 &engine.factory,
-                &config.direction,
+                config.direction,
                 engine.video_track_source.as_ref(),
                 config.degradation_preference,
                 config.video_codec_type.as_deref(),
@@ -294,7 +331,7 @@ async fn connect_once(
                                     &sdp,
                                     &cmd_tx,
                                     &engine.factory,
-                                    &config.direction,
+                                    config.direction,
                                     vs,
                                     config.degradation_preference,
                                 )
@@ -327,21 +364,21 @@ async fn connect_once(
                             let _ = cmd_tx
                                 .send(SignalingCommand::SendText(Json(&PongMessage).to_string()))
                                 .await;
-                            info!(target: "ayame", "ping → pong");
+                            info!(target: "ayame", "received ping, sent pong");
                         }
                         ReceivedMessage::Bye => {
                             // momo は bye でも終了せず再接続に入る
-                            info!(target: "ayame", "bye 受信、再接続します");
+                            info!(target: "ayame", "received bye, reconnecting");
                             break;
                         }
                         _ => {}
                     },
                     Some(SignalingNotification::Error(e)) => {
-                        warn!(target: "ayame", error = %e, "シグナリングエラー");
+                        warn!(target: "ayame", error = %e, "signaling error");
                         break;
                     }
                     Some(SignalingNotification::Closed) | None => {
-                        info!(target: "ayame", "シグナリング接続がクローズされました");
+                        info!(target: "ayame", "signaling connection closed");
                         break;
                     }
                     Some(SignalingNotification::Connected) => {}

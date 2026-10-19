@@ -1,3 +1,7 @@
+//! Ayame シグナリングメッセージの定義
+//!
+//! Ayame サーバーとやり取りする JSON メッセージの生成とパースを担当する。
+
 use nojson::{DisplayJson, JsonFormatter, RawJson};
 
 use crate::error::BoxError;

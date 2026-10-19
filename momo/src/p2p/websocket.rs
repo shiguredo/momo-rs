@@ -1,3 +1,8 @@
+//! P2P モードの WebSocket 接続処理
+//!
+//! HTTP の Upgrade 要求で確立した WebSocket のフレーム処理と、シグナリングタスクとの
+//! メッセージ中継を担当する。
+
 use std::sync::Arc;
 use std::time::Duration;
 

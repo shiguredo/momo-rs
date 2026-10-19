@@ -1,9 +1,11 @@
+//! P2P モードの WebRTC エンジン
+//!
+//! PeerConnectionFactory とキャプチャデバイスを生成し、接続ごとに PeerConnection を
+//! 作成して映像・音声トラックを追加する。
+
 use std::sync::{Arc, Mutex};
 
 use shiguredo_audio_device::{AudioCapture, AudioCaptureConfig};
-
-/// oneshot チャンネルの送信側を保護するための型エイリアス
-type SharedSender<T> = Arc<Mutex<Option<oneshot::Sender<T>>>>;
 use shiguredo_video_device::{VideoCapture, VideoCaptureConfig};
 use shiguredo_webrtc::{
     AdaptFrameResult, AdaptedVideoTrackSource, AudioDecoderFactory, AudioDeviceModule,
@@ -23,6 +25,12 @@ use super::P2PConfig;
 use super::message::{json_answer, json_candidate};
 use crate::adm::{AdmState, build_adm_handler};
 use crate::error::{BoxError, wrtc_err};
+
+/// oneshot チャンネルの送信側を保護するための型エイリアス
+///
+/// SDP 操作のコールバックは C++ スレッドから呼ばれるため、送信側を `Mutex` で包んで
+/// 1 回だけ取り出せるようにしている。
+type SharedSender<T> = Arc<Mutex<Option<oneshot::Sender<T>>>>;
 
 // ─── WebRTC エンジン ────────────────────────────────────────────────────────
 

@@ -32,6 +32,10 @@ pub(crate) type DmaBufMap = Arc<Mutex<HashMap<i64, DmaBufEntry>>>;
 /// YU12 (= I420) の FOURCC
 const YU12_FOURCC: u32 = u32::from_le_bytes(*b"YU12");
 
+// Mutex が poison された状態は DMA-BUF の受け渡しが壊れていることを意味するため、
+// 握りつぶさずパニックさせて異常を明示する
+const DMABUF_MAP_LOCK_POISONED: &str = "dmabuf_map lock poisoned";
+
 /// libcamera キャプチャのハンドル
 ///
 /// Drop 時にキャプチャスレッドを停止する。
@@ -238,10 +242,12 @@ fn run_libcamera_loop(
         if let Some((fd, offset, length, timestamp_us)) = frame_info {
             if native {
                 // ── ネイティブモード: DMA-BUF fd をエンコーダーに直接渡す ──
-                let map = dmabuf_map.as_ref().unwrap();
+                let map = dmabuf_map
+                    .as_ref()
+                    .expect("BUG: native mode requires a dma-buf map");
                 let (done_tx, done_rx) = std::sync::mpsc::sync_channel(1);
                 {
-                    let mut guard = map.lock().unwrap();
+                    let mut guard = map.lock().expect(DMABUF_MAP_LOCK_POISONED);
                     guard.insert(
                         timestamp_us as i64,
                         DmaBufEntry {
@@ -269,7 +275,7 @@ fn run_libcamera_loop(
                         source.on_frame(&video_frame);
                     } else {
                         // フレームがドロップされた場合はエントリを除去して即 requeue
-                        let mut guard = map.lock().unwrap();
+                        let mut guard = map.lock().expect(DMABUF_MAP_LOCK_POISONED);
                         guard.remove(&(timestamp_us as i64));
                         requeue_request(&camera, &requests, cookie, &parsed_controls);
                         continue;
@@ -280,7 +286,7 @@ fn run_libcamera_loop(
                 let _ = done_rx.recv_timeout(Duration::from_secs(1));
                 // タイムアウト時もエントリが残っていれば除去
                 {
-                    let mut guard = map.lock().unwrap();
+                    let mut guard = map.lock().expect(DMABUF_MAP_LOCK_POISONED);
                     guard.remove(&(timestamp_us as i64));
                 }
                 requeue_request(&camera, &requests, cookie, &parsed_controls);

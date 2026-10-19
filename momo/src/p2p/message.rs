@@ -1,3 +1,7 @@
+//! P2P シグナリングメッセージの生成
+//!
+//! P2P モードでブラウザとやり取りする JSON メッセージを組み立てる。
+
 /// register に対する accept メッセージを生成する
 pub(super) fn json_accept(is_exist_user: bool) -> String {
     nojson::object(|f| {

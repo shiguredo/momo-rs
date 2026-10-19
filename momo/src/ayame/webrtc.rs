@@ -1,9 +1,11 @@
+//! Ayame モードの WebRTC エンジン
+//!
+//! PeerConnectionFactory とキャプチャデバイスを生成し、シグナリングに応じた
+//! PeerConnection の作成・SDP の交換・トラックの追加を行う。
+
 use std::sync::{Arc, Mutex};
 
 use shiguredo_audio_device::{AudioCapture, AudioCaptureConfig};
-
-/// oneshot チャンネルの送信側を保護するための型エイリアス
-type SharedSender<T> = Arc<Mutex<Option<tokio::sync::oneshot::Sender<T>>>>;
 use shiguredo_video_device::{VideoCapture, VideoCaptureConfig};
 use shiguredo_webrtc::{
     AdaptFrameResult, AdaptedVideoTrackSource, AudioDecoderFactory, AudioDeviceModule,
@@ -25,6 +27,12 @@ use super::{AyameConfig, Direction, Watchdog};
 use crate::adm::{AdmState, build_adm_handler};
 use crate::error::{BoxError, wrtc_err};
 use crate::fake::start_fake_video_thread;
+
+/// oneshot チャンネルの送信側を保護するための型エイリアス
+///
+/// SDP 操作のコールバックは C++ スレッドから呼ばれるため、送信側を `Mutex` で包んで
+/// 1 回だけ取り出せるようにしている。
+type SharedSender<T> = Arc<Mutex<Option<tokio::sync::oneshot::Sender<T>>>>;
 
 // ─── WebRTC エンジン ──────────────────────────────────────────────────────────
 
@@ -169,7 +177,7 @@ impl AyameEngine {
                 (Some(vts), Some(capture))
             }
         } else {
-            info!(target: "ayame", "映像を無効化しました (--no-video-input-device)");
+            info!(target: "ayame", "video disabled (--no-video-input-device)");
             (None, None)
         };
 
@@ -205,7 +213,7 @@ impl AyameEngine {
                 if config.fake_capture_device {
                     info!(target: "ayame", "fake audio (--fake-capture-device)");
                 } else {
-                    info!(target: "ayame", "音声を無効化しました (--no-audio-device)");
+                    info!(target: "ayame", "audio disabled (--no-audio-device)");
                 }
                 let adm = crate::fake::create_dummy_adm(&env)?;
                 (None, None, adm)
@@ -402,7 +410,7 @@ fn configure_ice_servers(
 
 // ─── トランシーバー追加 ───────────────────────────────────────────────────────
 
-fn rtp_direction(dir: &Direction) -> RtpTransceiverDirection {
+fn rtp_direction(dir: Direction) -> RtpTransceiverDirection {
     match dir {
         Direction::SendRecv => RtpTransceiverDirection::SendRecv,
         Direction::SendOnly => RtpTransceiverDirection::SendOnly,
@@ -410,14 +418,14 @@ fn rtp_direction(dir: &Direction) -> RtpTransceiverDirection {
     }
 }
 
-pub(super) fn sends_video(dir: &Direction) -> bool {
+pub(super) fn sends_video(dir: Direction) -> bool {
     matches!(dir, Direction::SendRecv | Direction::SendOnly)
 }
 
 pub(super) fn add_transceivers(
     pc: &PeerConnection,
     factory: &shiguredo_webrtc::PeerConnectionFactory,
-    direction: &Direction,
+    direction: Direction,
     video_source: Option<&VideoTrackSource>,
     degradation_preference: shiguredo_webrtc::DegradationPreference,
     video_codec_type: Option<&str>,
@@ -566,7 +574,7 @@ pub(super) fn create_and_send_offer(
         .map_err(|_| -> BoxError { "SetLocalDescription チャンネルクローズ".into() })?
         .map_err(|e| -> BoxError { e.into() })?;
 
-    info!(target: "sdp", "offer 送信");
+    info!(target: "sdp", "sending offer");
     Ok(())
 }
 
@@ -575,7 +583,7 @@ pub(super) fn handle_offer(
     sdp: &str,
     cmd_tx: &tokio::sync::mpsc::Sender<SignalingCommand>,
     factory: &shiguredo_webrtc::PeerConnectionFactory,
-    direction: &Direction,
+    direction: Direction,
     video_source: Option<VideoTrackSource>,
     degradation_preference: shiguredo_webrtc::DegradationPreference,
 ) -> Result<(), BoxError> {
@@ -701,7 +709,7 @@ pub(super) fn handle_offer(
         .map_err(|_| -> BoxError { "SetLocalDescription チャンネルクローズ".into() })?
         .map_err(|e| -> BoxError { e.into() })?;
 
-    info!(target: "sdp", "answer 送信");
+    info!(target: "sdp", "sending answer");
     Ok(())
 }
 

@@ -1,3 +1,7 @@
+//! Ayame の WebSocket シグナリングタスク
+//!
+//! WebSocket 接続の維持と、テキストメッセージの送受信を非同期タスクとして提供する。
+
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

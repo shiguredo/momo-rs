@@ -1,3 +1,7 @@
+//! momo のバイナリエントリポイント
+//!
+//! CLI 引数をパースし、p2p / ayame / sora の各モードへ振り分ける。
+
 mod adm;
 mod audio_device;
 mod ayame;
@@ -545,41 +549,71 @@ impl ForcePixelFormat {
     }
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "モードごとに参照する項目が異なり、未読の項目が残る"
+)]
 struct MomoConfig {
+    /// 音声デバイスを使わない (`--no-audio-device`)
     no_audio_device: bool,
+    /// 映像入力デバイスを使わない (`--no-video-input-device`)
     no_video_input_device: bool,
+    /// Google の STUN サーバーを使わない (`--no-google-stun`)
     no_google_stun: bool,
+    /// 実デバイスの代わりにフェイクのキャプチャを使う (`--fake-capture-device`)
     fake_capture_device: bool,
+    /// libcamera でキャプチャする (`--use-libcamera`、Raspberry Pi feature のみ)
     use_libcamera: bool,
+    /// libcamera の DMA-BUF を V4L2 エンコーダーへ直接渡す (`--use-libcamera-native`)
     use_libcamera_native: bool,
+    /// libcamera のコントロール設定 (`--libcamera-control` のキーと値)
     libcamera_controls: Vec<(String, String)>,
+    /// V4L2 M2M のハードウェア H.264 エンコーダーを使う (`--use-v4l2-encoder`、Raspberry Pi feature のみ)
     use_v4l2_encoder: bool,
+    /// 読み込み済みの OpenH264 ライブラリ (`--openh264` 指定時のみ `Some`)
     openh264_lib: Option<shiguredo_openh264::Openh264Library>,
+    /// H.264 エンコーダー名の指定 (`--h264-encoder`)
     h264_encoder: Option<String>,
+    /// H.264 デコーダー名の指定 (`--h264-decoder`)
     h264_decoder: Option<String>,
+    /// H.265 エンコーダー名の指定 (`--h265-encoder`)
     h265_encoder: Option<String>,
+    /// H.265 デコーダー名の指定 (`--h265-decoder`)
     h265_decoder: Option<String>,
+    /// VP8 エンコーダー名の指定 (`--vp8-encoder`)
     vp8_encoder: Option<String>,
+    /// VP8 デコーダー名の指定 (`--vp8-decoder`)
     vp8_decoder: Option<String>,
+    /// VP9 エンコーダー名の指定 (`--vp9-encoder`)
     vp9_encoder: Option<String>,
+    /// VP9 デコーダー名の指定 (`--vp9-decoder`)
     vp9_decoder: Option<String>,
+    /// AV1 エンコーダー名の指定 (`--av1-encoder`)
     av1_encoder: Option<String>,
+    /// AV1 デコーダー名の指定 (`--av1-decoder`)
     av1_decoder: Option<String>,
     /// P2P / Ayame モード用のコーデックエンコーダー/デコーダー選択
     codec_selection: video_codec_factory::CodecSelection,
+    /// 映像入力デバイスの指定 (`--video-input-device`、インデックス番号かデバイス名)
     video_input_device: Option<String>,
+    /// 音声入力デバイスの指定 (`--audio-input-device`、インデックス番号かデバイス名)
     audio_input_device: Option<String>,
     audio_output_device: Option<String>,
+    /// 映像の幅 (ピクセル。`--resolution` から決まる)
     video_width: i32,
+    /// 映像の高さ (ピクセル。`--resolution` から決まる)
     video_height: i32,
+    /// 映像のフレームレート (fps。`--framerate` を検証した値)
     framerate: u32,
+    /// サーバー証明書の検証を無効化する (`--insecure`)
     insecure: bool,
+    /// 映像入力のピクセル形式を固定する (`--force-i420` など。`None` なら自動選択)
     force_pixel_format: Option<ForcePixelFormat>,
     /// クライアント証明書 (cert_pem, key_pem)
     client_cert: Option<(String, String)>,
     /// CA 証明書 (PEM)
     ca_cert: Option<String>,
+    /// 映像劣化時に優先する品質 (`--degradation-preference`)
     degradation_preference: Option<shiguredo_webrtc::DegradationPreference>,
     /// プロキシ URL (Sora モードのみ利用)
     proxy_url: Option<String>,
@@ -587,10 +621,14 @@ struct MomoConfig {
     proxy_username: Option<String>,
     /// プロキシ認証パスワード (Sora モードのみ利用)
     proxy_password: Option<String>,
+    /// シリアル経由の DataChannel パススルー設定 (`--serial`)
     #[cfg(target_os = "linux")]
     serial: Option<serial::SerialConfig>,
+    /// player で映像を表示するか (`--player`)
     use_player: bool,
+    /// player のウィンドウ幅 (`--window-width`)
     window_width: u32,
+    /// player のウィンドウ高さ (`--window-height`)
     window_height: u32,
 }
 
@@ -1023,21 +1061,33 @@ fn print_devices_json() -> Result<(), crate::error::BoxError> {
     use shiguredo_video_device::{PixelFormat, VideoDeviceList};
 
     struct VFormat {
+        /// 映像の幅 (ピクセル)
         width: i32,
+        /// 映像の高さ (ピクセル)
         height: i32,
+        /// サポートする最小フレームレート (fps)
         min_fps: f32,
+        /// サポートする最大フレームレート (fps)
         max_fps: f32,
+        /// ピクセル形式の名前
         pixel_format: String,
     }
     struct VDevice {
+        /// デバイス名
         name: String,
+        /// デバイスの一意な ID
         unique_id: String,
+        /// サポートする映像フォーマットの一覧
         formats: Vec<VFormat>,
     }
     struct ADevice {
+        /// デバイス名
         name: String,
+        /// デバイスの一意な ID
         unique_id: String,
+        /// チャンネル数
         channels: i32,
+        /// サンプリングレート (Hz)
         sample_rate: i32,
     }
 

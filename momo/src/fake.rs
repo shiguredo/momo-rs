@@ -1,3 +1,8 @@
+//! 開発・検証用のフェイクキャプチャデバイス
+//!
+//! raden で描画したアニメーション映像とビープ音を生成し、実デバイスの代わりに
+//! WebRTC へ供給する。
+
 use std::f64::consts::PI;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,6 +12,10 @@ use shiguredo_webrtc::{
     AdaptedVideoTrackSource, AudioDeviceModule, AudioDeviceModuleHandler, AudioTransportRef,
     I420Buffer,
 };
+
+// Mutex が poison された状態は WebRTC のコールバック経路が壊れていることを意味するため、
+// 握りつぶさずパニックさせて異常を明示する
+const AUDIO_TRANSPORT_LOCK_POISONED: &str = "audio_transport lock poisoned";
 
 // ─── BGRA → I420 変換 ─────────────────────────────────────────────────────────
 
@@ -154,7 +163,10 @@ struct FakeAudioHandler {
 
 impl AudioDeviceModuleHandler for FakeAudioHandler {
     fn register_audio_callback(&self, transport: Option<AudioTransportRef>) -> i32 {
-        let mut stored = self.audio_transport.lock().unwrap();
+        let mut stored = self
+            .audio_transport
+            .lock()
+            .expect(AUDIO_TRANSPORT_LOCK_POISONED);
         *stored = transport;
         0
     }
@@ -305,7 +317,10 @@ fn audio_thread(state: FakeAudioState) {
         // WebRTC に送信
         if state.recording.load(Ordering::SeqCst) {
             let transport = {
-                let stored = state.audio_transport.lock().unwrap();
+                let stored = state
+                    .audio_transport
+                    .lock()
+                    .expect(AUDIO_TRANSPORT_LOCK_POISONED);
                 *stored
             };
             if let Some(transport) = transport {

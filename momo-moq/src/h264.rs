@@ -118,7 +118,9 @@ pub fn parse_avc_decoder_config_record(data: &[u8]) -> Result<AvcDecoderConfig, 
     let length_size = ((data[4] & 0x03) as usize) + 1;
     let num_sps = (data[5] & 0x1F) as usize;
     let mut offset = 6;
-    let mut sps = Vec::with_capacity(num_sps);
+    // デコード結果のカウントで事前確保すると、壊れた入力で過大な領域を確保しうるため
+    // 事前確保はせず、実際に読めた SPS だけを積む
+    let mut sps = Vec::new();
     for _ in 0..num_sps {
         if offset + 2 > data.len() {
             return Err(MoqError::Media(
@@ -142,7 +144,8 @@ pub fn parse_avc_decoder_config_record(data: &[u8]) -> Result<AvcDecoderConfig, 
     }
     let num_pps = data[offset] as usize;
     offset += 1;
-    let mut pps = Vec::with_capacity(num_pps);
+    // SPS と同様に、デコード結果のカウントでは事前確保しない
+    let mut pps = Vec::new();
     for _ in 0..num_pps {
         if offset + 2 > data.len() {
             return Err(MoqError::Media(

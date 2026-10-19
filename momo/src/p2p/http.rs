@@ -1,3 +1,7 @@
+//! P2P モードの静的ファイル配信
+//!
+//! ドキュメントルート配下のファイルを HTTP/1.1 のレスポンスとして返す。
+
 use std::path::Path;
 
 use shiguredo_http11::Response;

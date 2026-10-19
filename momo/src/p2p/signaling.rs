@@ -1,3 +1,7 @@
+//! P2P のシグナリング処理
+//!
+//! WebSocket 経由で受け取った offer / answer / candidate を WebRTC エンジンへ反映する。
+
 use std::sync::Arc;
 
 use nojson::RawJson;
