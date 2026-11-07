@@ -123,7 +123,9 @@ fn open_serial(config: &SerialConfig) -> Result<AsyncFd<File>, String> {
         }
     }
 
-    AsyncFd::new(file).map_err(|e| format!("AsyncFd::new failed: {e}"))
+    // `File` がシリアルポートの fd を唯一所有しており、同じ fd を別のハンドルと
+    // 共有していないため、`AsyncFd::register` が要求する I/O 安全性の条件を満たす
+    unsafe { AsyncFd::register(file) }.map_err(|e| format!("AsyncFd::register failed: {e}"))
 }
 
 /// DataChannel の on_message で受信したデータをチャンネルに転送するハンドラ

@@ -134,7 +134,7 @@ pub async fn run(
 ) -> Result<(), BoxError> {
     let server = ServerUrl::parse(&config.url)?;
     let connection = quic::connect(&server, common.insecure, common.ca_cert.as_deref()).await?;
-    let (mut client, mut acceptor) = MoqtClient::establish(connection, &server).await?;
+    let (mut client, acceptor) = MoqtClient::establish(connection, &server).await?;
     client.set_control_message_timeout_ms(Some(TIMEOUT_MS));
     client.set_data_stream_timeout_ms(Some(TIMEOUT_MS));
 
@@ -165,7 +165,7 @@ pub async fn run(
             parameters,
         )
         .await?;
-    let msf_catalog = receive_catalog(&mut acceptor, &data_plane, fetch_result.request_id).await?;
+    let msf_catalog = receive_catalog(&acceptor, &data_plane, fetch_result.request_id).await?;
 
     // カタログから映像と音声のトラックを見つける (識別は codec の接頭辞で行う)
     let video_info = match catalog::find_video_track(&msf_catalog) {
@@ -270,7 +270,7 @@ pub async fn run(
                 }
             }
             _ = tick.tick() => {
-                client.tick(start.elapsed().as_millis() as u64);
+                client.tick(start.elapsed().as_millis() as u64).await;
             }
         }
     }
@@ -341,7 +341,7 @@ async fn handle_event(client: &mut MoqtClient, event: ClientEvent) -> Result<boo
 
 /// カタログ FETCH の応答ストリームを受信してカタログを組み立てる
 async fn receive_catalog(
-    acceptor: &mut StreamAcceptor,
+    acceptor: &StreamAcceptor,
     data_plane: &DataPlaneHandle,
     expected_request_id: u64,
 ) -> Result<MsfCatalog, BoxError> {
@@ -476,7 +476,7 @@ async fn decode_catalog_stream(
 }
 
 /// 単方向ストリームを受け入れて処理する
-async fn accept_streams(mut acceptor: StreamAcceptor, context: StreamContext) {
+async fn accept_streams(acceptor: StreamAcceptor, context: StreamContext) {
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_STREAMS));
     loop {
         let stream = match acceptor.accept_recv_stream().await {

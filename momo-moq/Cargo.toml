@@ -44,7 +44,7 @@ rustls-pki-types.workspace = true
 # OS の証明書ストアを使ったサーバー証明書検証 (QUIC 接続)
 rustls-platform-verifier.workspace = true
 # QUIC クライアント (トランスポート)
-s2n-quic.workspace = true
+tobi_quic.workspace = true
 # 非同期ランタイム
 tokio.workspace = true
 # 構造化ログ出力

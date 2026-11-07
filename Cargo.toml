@@ -42,6 +42,12 @@ shiguredo_websocket = "2026.3"
 # DegradationPreference 設定 API が 2026.2.0-canary 系で初めて利用可能になったためプレリリースを使う。
 # 安定版 2026.1.x は shiguredo_webrtc ~0.150 に固定する制約もあり追従できない
 sora_sdk = "2026.2.0-canary.3"
+# QUIC クライアント (momo-moq のトランスポート)
+#
+# crates.io に公開されていないため git で参照する。このリポジトリの main は
+# 公開のたびに 1 コミットへ作り直される (履歴を積まない) ため、rev ではなく
+# branch を指定する。
+tobi_quic = { git = "https://github.com/shiguredo/tobi-quic", branch = "main" }
 
 # 外部クレート
 
@@ -68,17 +74,6 @@ rustls = {
 rustls-pki-types = { version = "1.15", features = ["std"] }
 # OS の証明書ストアを使ったサーバー証明書検証 (Ayame シグナリング / momo-moq の QUIC 接続)
 rustls-platform-verifier = "0.7"
-# QUIC クライアント (momo-moq のトランスポート)
-# Object Datagram に datagram provider が必要で、s2n-quic では unstable feature になる
-s2n-quic = {
-  version = "1.88",
-  default-features = false,
-  features = [
-    "provider-address-token-default",
-    "provider-tls-rustls",
-    "unstable-provider-datagram",
-  ]
-}
 # 非同期ランタイム
 tokio = {
   version = "1.53",

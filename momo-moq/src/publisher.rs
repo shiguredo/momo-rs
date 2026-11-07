@@ -252,7 +252,7 @@ impl SubgroupWriter {
     async fn finish(mut self) -> Result<(), BoxError> {
         if !self.header_sent || self.skipped {
             let error_code = DataStreamResetReason::Cancelled.error_code();
-            self.stream.reset(error_code)?;
+            self.stream.reset(error_code).await?;
             self.data_plane.send_data_stream_closed(
                 self.stream_id,
                 // ローカルの Cancelled による RESET であり、コードは常にあるため Some にする
@@ -263,7 +263,7 @@ impl SubgroupWriter {
                 },
             )?;
         } else {
-            self.stream.finish()?;
+            self.stream.finish().await?;
             self.data_plane
                 .send_data_stream_closed(self.stream_id, RequestStreamEnd::Fin)?;
         }
@@ -951,7 +951,7 @@ pub async fn run(config: MoqConfig, common: MoqCommonConfig) -> Result<(), BoxEr
                 }
             }
             _ = tick.tick() => {
-                publisher.client.tick(start.elapsed().as_millis() as u64);
+                publisher.client.tick(start.elapsed().as_millis() as u64).await;
             }
         }
     }

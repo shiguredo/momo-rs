@@ -1,7 +1,7 @@
 //! MOQT の Session と QUIC I/O を繋ぐクライアント
 //!
 //! Sans-I/O な `shiguredo_moqt::Session` を核に、制御ストリームと bidi request stream を
-//! `s2n-quic` 上で駆動する。publisher / subscriber の双方が共有する。
+//! `tobi-quic` 上で駆動する。publisher / subscriber の双方が共有する。
 //!
 //! ストリームの対応は draft-ietf-moq-transport-21 §6.3 (Session initialization) /
 //! §6.4 (Streams) に従う。draft 由来のため将来の改版で変わる可能性がある。
@@ -33,9 +33,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::BoxError;
 use crate::error::MoqError;
-use crate::transport::{
-    BidiStreamAcceptor, RecvChunk, RecvStream, SendStream, StreamAcceptor, StreamHandle,
-};
+use crate::transport::{RecvChunk, RecvStream, SendStream, StreamAcceptor, StreamHandle};
 use crate::url::ServerUrl;
 
 /// Subscriber Priority の既定値
@@ -195,8 +193,8 @@ impl ControlStream {
     }
 
     /// 受信方向へ STOP_SENDING を送出する
-    pub fn stop_sending(&mut self, error_code: u64) -> Result<(), MoqError> {
-        self.stream.stop_sending(error_code)
+    pub async fn stop_sending(&mut self, error_code: u64) -> Result<(), MoqError> {
+        self.stream.stop_sending(error_code).await
     }
 }
 
@@ -462,12 +460,15 @@ impl MoqtClient {
     /// 受信タスクを起動する。戻り値の [`StreamAcceptor`] は data stream を受信する側
     /// (subscriber) が使う。
     pub async fn establish(
-        connection: s2n_quic::connection::Connection,
+        connection: tobi_quic::Connection,
         server: &ServerUrl,
     ) -> Result<(Self, StreamAcceptor), BoxError> {
+        // ストリームを開くハンドルと受理するハンドルに分ける。tobi-quic の
+        // 受理ハンドルは単方向と双方向の両方を受け付けられるため、
+        // data stream の受信タスクと request stream の受信タスクで共有する
         let (handle, acceptor) = connection.split();
-        let (bidi_acceptor, mut recv_acceptor) = acceptor.split();
         let handle = StreamHandle::new(handle);
+        let acceptor = StreamAcceptor::new(acceptor);
 
         // 自側の制御ストリームを開く
         let mut control_send = handle.open_send_stream().await?;
@@ -494,12 +495,12 @@ impl MoqtClient {
         tracing::info!(target: "moq", "sent SETUP message");
 
         // 相手の制御ストリームを待つ
-        let recv_stream = recv_acceptor
-            .accept_receive_stream()
+        let recv_stream = acceptor
+            .accept_recv_stream()
             .await
             .map_err(|e| MoqError::Quic(format!("failed to accept control stream: {e}")))?
             .ok_or_else(|| MoqError::Quic("connection closed before control stream".into()))?;
-        let mut control_recv = ControlStream::new(RecvStream::new(recv_stream));
+        let mut control_recv = ControlStream::new(recv_stream);
         let stream_type = match control_recv.read_stream_type().await? {
             StreamRead::Value(stream_type) => stream_type,
             StreamRead::Closed(_) => {
@@ -545,8 +546,7 @@ impl MoqtClient {
         // 制御ストリームの受信をタスク化する
         let (control_rx, _control_task) = spawn_control_recv_task(control_recv);
         let (bidi_tx, bidi_rx) = mpsc::channel::<BidiMessage>(64);
-        let _peer_bidi_task =
-            spawn_peer_bidi_accept_task(BidiStreamAcceptor::new(bidi_acceptor), bidi_tx.clone());
+        let _peer_bidi_task = spawn_peer_bidi_accept_task(acceptor.clone(), bidi_tx.clone());
 
         let client = Self {
             session,
@@ -563,7 +563,7 @@ impl MoqtClient {
             bidi_rx,
             closing: false,
         };
-        Ok((client, StreamAcceptor::new(recv_acceptor)))
+        Ok((client, acceptor))
     }
 
     /// ストリーム開設用ハンドルのクローン
@@ -872,7 +872,7 @@ impl MoqtClient {
 
         data_plane.send_fetch_object(stream_id)?;
         stream.send(Bytes::from(buf)).await?;
-        stream.finish()?;
+        stream.finish().await?;
         data_plane.send_fetch_data_stream_closed(stream_id)?;
         Ok(())
     }
@@ -881,11 +881,12 @@ impl MoqtClient {
     ///
     /// `now_ms` は単調増加のミリ秒。SESSION のタイムアウト判定はこの呼び出しで進むため、
     /// 定期的に呼ぶ必要がある。
-    pub fn tick(&mut self, now_ms: u64) {
-        let mut session = lock_session(&self.session);
-        session.tick(now_ms);
-        drop(session);
-        self.cleanup_closed_requests();
+    pub async fn tick(&mut self, now_ms: u64) {
+        {
+            let mut session = lock_session(&self.session);
+            session.tick(now_ms);
+        }
+        self.cleanup_closed_requests().await;
     }
 
     /// 購読を停止する (subscriber 側)
@@ -902,7 +903,7 @@ impl MoqtClient {
         self.drain_events().await?;
         let error_code = DataStreamResetReason::Cancelled.error_code();
         if let Some(mut send) = self.bidi_sends.remove(&request_id)
-            && let Err(e) = send.reset(error_code)
+            && let Err(e) = send.reset(error_code).await
         {
             tracing::warn!(target: "moq", request_id = request_id, "failed to reset request stream: {e}");
         }
@@ -1067,7 +1068,7 @@ impl MoqtClient {
                     }
                     tracing::debug!(target: "moq", request_id = request_id, "request stream closed by peer");
                     self.drain_events().await?;
-                    self.cleanup_closed_requests();
+                    self.cleanup_closed_requests().await;
                 }
             },
             BidiMessage::PeerRequest {
@@ -1144,7 +1145,7 @@ impl MoqtClient {
                         })?;
                         send.send(Bytes::from(encoded)).await?;
                         if fin {
-                            send.finish()?;
+                            send.finish().await?;
                         } else {
                             self.bidi_sends.insert(request_id, send);
                         }
@@ -1158,7 +1159,7 @@ impl MoqtClient {
                 }
                 SessionEvent::FinishRequestStream { request_id } => {
                     if let Some(mut send) = self.bidi_sends.remove(&request_id)
-                        && let Err(e) = send.finish()
+                        && let Err(e) = send.finish().await
                     {
                         tracing::warn!(target: "moq", request_id = request_id, "failed to finish request stream: {e}");
                     }
@@ -1168,7 +1169,7 @@ impl MoqtClient {
                     error_code,
                 } => {
                     if let Some(mut send) = self.bidi_sends.remove(&request_id)
-                        && let Err(e) = send.reset(error_code)
+                        && let Err(e) = send.reset(error_code).await
                     {
                         tracing::warn!(target: "moq", request_id = request_id, "failed to reset request stream: {e}");
                     }
@@ -1181,7 +1182,7 @@ impl MoqtClient {
                     self.request_stop_sending(request_id, error_code).await;
                 }
                 SessionEvent::CloseSession(error) => {
-                    self.handle.close(error.code, error.reason);
+                    self.handle.close(error.code, error.reason).await;
                     if self.closing {
                         // 自側からの close で発生したイベントはエラーではない
                         return Ok(());
@@ -1214,12 +1215,12 @@ impl MoqtClient {
                 }
             }
         }
-        self.cleanup_closed_requests();
+        self.cleanup_closed_requests().await;
         Ok(())
     }
 
     /// 終端済み request stream を回収する
-    fn cleanup_closed_requests(&mut self) {
+    async fn cleanup_closed_requests(&mut self) {
         let request_ids: Vec<u64> = self.closed_request_streams.iter().copied().collect();
         let mut forgotten = Vec::new();
         {
@@ -1242,7 +1243,7 @@ impl MoqtClient {
             self.closed_request_streams.remove(&request_id);
             self.bidi_stop_txs.remove(&request_id);
             if let Some(mut send) = self.bidi_sends.remove(&request_id) {
-                let _ = send.finish();
+                let _ = send.finish().await;
             }
         }
     }
@@ -1297,7 +1298,7 @@ fn spawn_bidi_recv_task(
                 biased;
                 command = stop_rx.recv() => {
                     if let Some(command) = command {
-                        let result = stream.stop_sending(command.error_code);
+                        let result = stream.stop_sending(command.error_code).await;
                         let _ = command.ack.send(result);
                     }
                     break;
@@ -1331,7 +1332,7 @@ fn spawn_bidi_recv_task(
 /// relay は subscriber の SUBSCRIBE / FETCH を publisher 側の新しい request stream として
 /// 転送するため、publisher はこのストリームを受理する必要がある。
 fn spawn_peer_bidi_accept_task(
-    mut acceptor: BidiStreamAcceptor,
+    acceptor: StreamAcceptor,
     tx: mpsc::Sender<BidiMessage>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -1379,7 +1380,7 @@ fn spawn_peer_bidi_accept_task(
                         biased;
                         command = stop_rx.recv() => {
                             if let Some(command) = command {
-                                let result = stream.stop_sending(command.error_code);
+                                let result = stream.stop_sending(command.error_code).await;
                                 let _ = command.ack.send(result);
                             }
                             break;
