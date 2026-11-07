@@ -6,7 +6,10 @@
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::Duration;
 
-use raw_player::{Event, KEYCODE_ESCAPE, Renderer, Texture, Window};
+use raw_player::event::{Event, KEYCODE_ESCAPE, poll_event};
+use raw_player::renderer::Renderer;
+use raw_player::texture::Texture;
+use raw_player::window::Window;
 use shiguredo_webrtc::{I420Buffer, VideoFrameRef, VideoSink, VideoSinkHandler};
 
 use crate::error::BoxError;
@@ -216,7 +219,7 @@ fn handle_display_command(cells: &mut Vec<Cell>, cmd: DisplayCommand) {
 /// ウィンドウクローズ・Quit・ESC キーによる終了要求を確認する
 fn window_close_requested() -> bool {
     let mut close = false;
-    while let Some(event) = raw_player::poll_event() {
+    while let Some(event) = poll_event() {
         match event {
             Event::Quit | Event::WindowClose => close = true,
             Event::KeyDown { keycode } if keycode == KEYCODE_ESCAPE => close = true,

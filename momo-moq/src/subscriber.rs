@@ -925,8 +925,8 @@ pub fn run_player(
         .map_err(|e| MoqError::Media(format!("failed to initialize raw_player: {e}")))?;
     info!(target: "moq", "player initialized");
 
-    let mut video_player: Option<raw_player::VideoPlayer> = None;
-    let audio_player = raw_player::AudioPlayer::new();
+    let mut video_player: Option<raw_player::video_player::VideoPlayer> = None;
+    let audio_player = raw_player::audio_player::AudioPlayer::new();
     let mut audio_started = false;
     let mut video_disconnected = false;
     let mut audio_disconnected = false;
@@ -950,7 +950,7 @@ pub fn run_player(
                 };
                 if need_recreate {
                     info!(target: "moq", width = frame.width, height = frame.height, "creating the player window");
-                    let player = raw_player::VideoPlayer::new(
+                    let player = raw_player::video_player::VideoPlayer::new(
                         frame.width,
                         frame.height,
                         "momo-moq - MoQT Subscriber",
@@ -988,7 +988,7 @@ pub fn run_player(
                     frame.pts_us,
                     frame.sample_rate as i32,
                     frame.channels as i32,
-                    raw_player::AudioFormat::S16,
+                    raw_player::audio_format::AudioFormat::S16,
                 ) {
                     warn!(target: "moq", "failed to enqueue an audio frame: {e}");
                 }
