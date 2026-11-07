@@ -28,12 +28,12 @@ WebRTC Native Client Momo の Rust 実装です。libwebrtc を利用し、ブ�
 
 | OS | アーキテクチャ | 提供形態 |
 |---|---|---|
+| macOS 27 | arm64 | ネイティブ |
 | macOS 26 | arm64 | ネイティブ |
-| macOS 15 | arm64 | ネイティブ |
+| Ubuntu 26.04 | x86_64 | ネイティブ |
 | Ubuntu 24.04 | x86_64 | ネイティブ |
-| Ubuntu 22.04 | x86_64 | ネイティブ |
+| Ubuntu 26.04 | arm64 | クロスコンパイル |
 | Ubuntu 24.04 | arm64 | クロスコンパイル |
-| Ubuntu 22.04 | arm64 | クロスコンパイル |
 | Raspberry Pi OS (trixie) | arm64 | クロスコンパイル |
 
 ## ビルド
@@ -63,8 +63,8 @@ Docker を使う場合は `container` を `docker` に読み替えてくださ�
 | ターゲット | sysroot 生成 | ビルド |
 |---|---|---|
 | Raspberry Pi (arm64) | `make sysroot-raspberry-pi` | `make sysroot-build-raspberry-pi` |
+| Ubuntu 26.04 (arm64) | `make sysroot-ubuntu-26.04_arm64` | `make sysroot-build-ubuntu-26.04_arm64` |
 | Ubuntu 24.04 (arm64) | `make sysroot-ubuntu-24.04_arm64` | `make sysroot-build-ubuntu-24.04_arm64` |
-| Ubuntu 22.04 (arm64) | `make sysroot-ubuntu-22.04_arm64` | `make sysroot-build-ubuntu-22.04_arm64` |
 
 リリースビルドは各ターゲットに `-release` を付けてください（例: `make sysroot-build-raspberry-pi-release`）。
 

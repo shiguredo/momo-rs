@@ -1,9 +1,9 @@
 .PHONY: test cover pbt pbt-cover fuzz fuzzing fuzzing-parallel fuzzing-list check clippy fmt clean \
-	sysroot-raspberry-pi sysroot-ubuntu-24.04_arm64 sysroot-ubuntu-22.04_arm64 \
-	sysroot-clippy-raspberry-pi sysroot-clippy-ubuntu-24.04_arm64 sysroot-clippy-ubuntu-22.04_arm64 \
+	sysroot-raspberry-pi sysroot-ubuntu-24.04_arm64 sysroot-ubuntu-26.04_arm64 \
+	sysroot-clippy-raspberry-pi sysroot-clippy-ubuntu-24.04_arm64 sysroot-clippy-ubuntu-26.04_arm64 \
 	sysroot-build-raspberry-pi sysroot-build-raspberry-pi-release \
 	sysroot-build-ubuntu-24.04_arm64 sysroot-build-ubuntu-24.04_arm64-release \
-	sysroot-build-ubuntu-22.04_arm64 sysroot-build-ubuntu-22.04_arm64-release \
+	sysroot-build-ubuntu-26.04_arm64 sysroot-build-ubuntu-26.04_arm64-release \
 	clippy-raspberry-pi
 
 # 全テストを実行する
@@ -96,12 +96,12 @@ UBUNTU_2404_ARM64_ENV = $(call sysroot_env,$(UBUNTU_2404_ARM64_SYSROOT),aarch64-
 	WEBRTC_C_TARGET=ubuntu-24.04_armv8 \
 	WEBRTC_C_SYSROOT=$(UBUNTU_2404_ARM64_SYSROOT)
 
-# Ubuntu 22.04 arm64
-UBUNTU_2204_ARM64_SYSROOT = $(CURDIR)/target/shiguredo-sysroot/ubuntu-22.04_arm64/sysroot
-UBUNTU_2204_ARM64_BIN = $(CURDIR)/target/shiguredo-sysroot/ubuntu-22.04_arm64/bin
-UBUNTU_2204_ARM64_ENV = $(call sysroot_env,$(UBUNTU_2204_ARM64_SYSROOT),aarch64-linux-gnu,aarch64-linux-gnu-gcc,AARCH64_UNKNOWN_LINUX_GNU,$(UBUNTU_2204_ARM64_BIN),aarch64_unknown_linux_gnu) \
-	WEBRTC_C_TARGET=ubuntu-22.04_armv8 \
-	WEBRTC_C_SYSROOT=$(UBUNTU_2204_ARM64_SYSROOT)
+# Ubuntu 26.04 arm64
+UBUNTU_2604_ARM64_SYSROOT = $(CURDIR)/target/shiguredo-sysroot/ubuntu-26.04_arm64/sysroot
+UBUNTU_2604_ARM64_BIN = $(CURDIR)/target/shiguredo-sysroot/ubuntu-26.04_arm64/bin
+UBUNTU_2604_ARM64_ENV = $(call sysroot_env,$(UBUNTU_2604_ARM64_SYSROOT),aarch64-linux-gnu,aarch64-linux-gnu-gcc,AARCH64_UNKNOWN_LINUX_GNU,$(UBUNTU_2604_ARM64_BIN),aarch64_unknown_linux_gnu) \
+	WEBRTC_C_TARGET=ubuntu-26.04_armv8 \
+	WEBRTC_C_SYSROOT=$(UBUNTU_2604_ARM64_SYSROOT)
 
 # --- sysroot 生成 ---
 
@@ -115,9 +115,9 @@ sysroot-ubuntu-24.04_arm64:
 	cargo shiguredo-sysroot --config sysroot/ubuntu-24.04_arm64.json
 	rm -f .cargo/config.toml
 
-# Ubuntu 22.04 arm64 用 sysroot を生成する
-sysroot-ubuntu-22.04_arm64:
-	cargo shiguredo-sysroot --config sysroot/ubuntu-22.04_arm64.json
+# Ubuntu 26.04 arm64 用 sysroot を生成する
+sysroot-ubuntu-26.04_arm64:
+	cargo shiguredo-sysroot --config sysroot/ubuntu-26.04_arm64.json
 	rm -f .cargo/config.toml
 
 # --- sysroot clippy ---
@@ -130,9 +130,9 @@ sysroot-clippy-raspberry-pi:
 sysroot-clippy-ubuntu-24.04_arm64:
 	$(UBUNTU_2404_ARM64_ENV) cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
 
-# Ubuntu 22.04 arm64 向け sysroot clippy する
-sysroot-clippy-ubuntu-22.04_arm64:
-	$(UBUNTU_2204_ARM64_ENV) cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
+# Ubuntu 26.04 arm64 向け sysroot clippy する
+sysroot-clippy-ubuntu-26.04_arm64:
+	$(UBUNTU_2604_ARM64_ENV) cargo clippy -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features -- -D warnings
 
 # --- container を使った clippy ---
 
@@ -183,10 +183,10 @@ sysroot-build-ubuntu-24.04_arm64:
 sysroot-build-ubuntu-24.04_arm64-release:
 	$(UBUNTU_2404_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --release
 
-# Ubuntu 22.04 arm64 向け sysroot ビルドする
-sysroot-build-ubuntu-22.04_arm64:
-	$(UBUNTU_2204_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features
+# Ubuntu 26.04 arm64 向け sysroot ビルドする
+sysroot-build-ubuntu-26.04_arm64:
+	$(UBUNTU_2604_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features
 
-# Ubuntu 22.04 arm64 向け sysroot リリースビルドする
-sysroot-build-ubuntu-22.04_arm64-release:
-	$(UBUNTU_2204_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --release
+# Ubuntu 26.04 arm64 向け sysroot リリースビルドする
+sysroot-build-ubuntu-26.04_arm64-release:
+	$(UBUNTU_2604_ARM64_ENV) cargo build -p shiguredo_momo --target aarch64-unknown-linux-gnu --no-default-features --release
