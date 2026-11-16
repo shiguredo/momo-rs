@@ -1357,7 +1357,7 @@ dependencies = [
 [[package]]
 name = "tobi_core"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "hashbrown 0.17.1",
  "libm",
@@ -1366,7 +1366,7 @@ dependencies = [
 [[package]]
 name = "tobi_crypto"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "aws-lc-rs",
  "tobi_core",
@@ -1376,7 +1376,7 @@ dependencies = [
 [[package]]
 name = "tobi_platform"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "aws-lc-rs",
  "libc",
@@ -1394,7 +1394,7 @@ dependencies = [
 [[package]]
 name = "tobi_qlog"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "nojson",
  "tobi_core",
@@ -1403,7 +1403,7 @@ dependencies = [
 [[package]]
 name = "tobi_quic"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "aws-lc-rs",
  "nojson",
@@ -1419,7 +1419,7 @@ dependencies = [
 [[package]]
 name = "tobi_rustls"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "aws-lc-rs",
  "rustls",
@@ -1429,7 +1429,7 @@ dependencies = [
 [[package]]
 name = "tobi_transport"
 version = "2026.0.0"
-source = "git+https://github.com/shiguredo/tobi-quic?branch=main#640349265c78a5e050eaec6f31a728b8221b995d"
+source = "git+https://github.com/shiguredo/tobi-quic?branch=main#1a178417a286512e936dda3393d531cf2afa3a08"
 dependencies = [
  "tobi_core",
  "tobi_crypto",
