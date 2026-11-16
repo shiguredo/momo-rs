@@ -5,7 +5,7 @@ members = ["momo", "momo-moq"]
 [workspace.package]
 version = "2026.0.0"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 homepage = "https://github.com/shiguredo/momo-rs"
 repository = "https://github.com/shiguredo/momo-rs"
 license = "Apache-2.0"

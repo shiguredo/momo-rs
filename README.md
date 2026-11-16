@@ -38,7 +38,7 @@ WebRTC Native Client Momo の Rust 実装です。libwebrtc を利用し、ブ�
 
 ## ビルド
 
-Rust 1.99 以上が必要です（`Cargo.toml` の `rust-version` と合わせています）。
+Rust 1.100 以上が必要です（`Cargo.toml` の `rust-version` と合わせています）。
 
 ```bash
 cargo build --release
