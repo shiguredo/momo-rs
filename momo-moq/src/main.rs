@@ -1,6 +1,6 @@
 //! MOQT (Media over QUIC Transport) クライアント
 //!
-//! `draft-ietf-moq-transport-21` に基づき、MOQT relay へトラックを publish または
+//! `draft-ietf-moq-transport-23` に基づき、MOQT relay へトラックを publish または
 //! subscribe する。使い方は README を参照すること。
 
 mod audio_device;

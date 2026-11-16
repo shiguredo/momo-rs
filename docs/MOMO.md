@@ -145,7 +145,7 @@ TODO:
   - TLS は `--insecure` / `--cacert` を使う。両方指定時は `--insecure` を優先する。未指定時はシステムのルート証明書で検証する
   - `--openh264` は映像の符号化に必須。subscribe では映像の復号に必須
 - プロトコル:
-  - MOQT `draft-ietf-moq-transport-21` (ALPN `moqt-21`)、LOC `draft-ietf-moq-loc-04`、MSF `draft-ietf-moq-msf-01`
+  - MOQT `draft-ietf-moq-transport-23` (ALPN `moqt-23`)、LOC `draft-ietf-moq-loc-05`、MSF `draft-ietf-moq-msf-01`
   - `shiguredo_moqt` の `Session` (Sans-I/O) を `tobi-quic` の I/O と `momo-moq/src/client.rs` で繋ぐ
 - publish:
   - 映像は OpenH264 で H.264 (avc1) に符号化し、payload は 4 バイト長プレフィックス、パラメーターセットは Video Config (0x0D) の AVCDecoderConfigurationRecord に載せる

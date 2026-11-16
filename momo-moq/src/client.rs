@@ -3,8 +3,8 @@
 //! Sans-I/O な `shiguredo_moqt::Session` を核に、制御ストリームと bidi request stream を
 //! `tobi-quic` 上で駆動する。publisher / subscriber の双方が共有する。
 //!
-//! ストリームの対応は draft-ietf-moq-transport-21 §6.3 (Session initialization) /
-//! §6.4 (Streams) に従う。draft 由来のため将来の改版で変わる可能性がある。
+//! ストリームの対応は draft-ietf-moq-transport-23 §6.3 (Session initialization) /
+//! §6.4 (Stream Usage) に従う。draft 由来のため将来の改版で変わる可能性がある。
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -12,17 +12,18 @@ use std::sync::{Arc, Mutex as StdMutex};
 use bytes::Bytes;
 use shiguredo_moqt::decoder::MessageDecoder;
 use shiguredo_moqt::message::common::{Location, TrackNamespace};
-use shiguredo_moqt::message::{ControlMessage, ReasonPhrase};
+use shiguredo_moqt::message::{ControlMessage, ErrorDetails, ReasonPhrase};
 use shiguredo_moqt::message_parameter::{
     MessageParameter, MessageParameterValue, MessageParameters, PARAM_SUBSCRIBER_PRIORITY,
 };
+use shiguredo_moqt::parameter::DEFAULT_MAX_CONTROL_MESSAGE_SIZE;
 use shiguredo_moqt::session::core::Session;
 use shiguredo_moqt::session::types::{
-    DataStreamId, DataStreamResetReason, FetchState, RecvDataStreamError, RequestStreamEnd,
-    SendRequestError, SessionError as MoqtSessionError, SessionEvent, SessionState,
-    SubscriptionState, TrackDataAcceptance, Transport,
+    DataStreamId, DataStreamResetReason, FetchHeaderAcceptance, FetchState, RecvDataStreamError,
+    RequestStreamEnd, SendRequestError, SessionError as MoqtSessionError, SessionEvent,
+    SessionState, SubscriptionState, TrackDataAcceptance, Transport,
 };
-use shiguredo_moqt::stream::decoder::DecodedSubgroupObject;
+use shiguredo_moqt::stream::decoder::{DecodedFetchEntry, DecodedSubgroupObject};
 use shiguredo_moqt::stream::encode_control_stream_setup;
 use shiguredo_moqt::stream::fetch::{
     FetchHeader, FetchPriorContext, FetchStreamEntry, FetchStreamObject, FetchSubgroupIdMode,
@@ -38,7 +39,7 @@ use crate::url::ServerUrl;
 
 /// Subscriber Priority の既定値
 ///
-/// draft-ietf-moq-transport-21 §9.20.11 (SUBSCRIBER_PRIORITY) の中央値を使う。
+/// draft-ietf-moq-transport-23 §9.19.7 (SUBSCRIBER PRIORITY Parameter) の中央値を使う。
 const DEFAULT_SUBSCRIBER_PRIORITY: u8 = 128;
 
 /// SETUP の MOQT_IMPLEMENTATION に載せる実装名
@@ -46,7 +47,7 @@ const IMPLEMENTATION_NAME: &str = "momo-rs";
 
 /// オブジェクト送信前のフィルタ評価の結果
 ///
-/// draft-ietf-moq-transport-21 §3.3.3 (Combining Filters): publisher はすべてのフィルタを
+/// draft-ietf-moq-transport-23 §3.3.3 (Combining Filters): publisher はすべてのフィルタを
 /// 通過したオブジェクトだけを転送しなければならない。draft 由来のため将来の改版で
 /// 変わる可能性がある。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,7 +83,7 @@ enum BidiMessage {
 
 /// bidi 受信タスクへの STOP_SENDING 指示
 struct StopSendingCommand {
-    /// Stream Reset Error Code (draft-ietf-moq-transport-21 §12.5)
+    /// Stream Reset Error Code (draft-ietf-moq-transport-23 §12.5)
     error_code: u64,
     /// 送出結果の完了通知
     ack: oneshot::Sender<Result<(), MoqError>>,
@@ -151,10 +152,13 @@ pub struct ControlStream {
 
 impl ControlStream {
     /// 受信ストリームからリーダーを作る
-    pub fn new(stream: RecvStream) -> Self {
+    ///
+    /// `max_control_message_size` は自側が SETUP で広告した `MAX_CONTROL_MESSAGE_SIZE`
+    /// (draft-ietf-moq-transport-23 §9.1.8 (MAX_CONTROL_MESSAGE_SIZE)) である。
+    pub fn new(stream: RecvStream, max_control_message_size: u64) -> Self {
         Self {
             stream,
-            decoder: MessageDecoder::new(),
+            decoder: MessageDecoder::new(max_control_message_size),
         }
     }
 
@@ -262,10 +266,14 @@ impl DataPlaneHandle {
     }
 
     /// FETCH 応答 stream 上の Object 送信を Session に通知する (publisher 側)
-    pub fn send_fetch_object(&self, stream_id: DataStreamId) -> Result<(), BoxError> {
+    pub fn send_fetch_object(
+        &self,
+        stream_id: DataStreamId,
+        location: &Location,
+    ) -> Result<(), BoxError> {
         let mut session = lock_session(&self.session);
         session
-            .send_fetch_object(stream_id)
+            .send_fetch_object(stream_id, location)
             .map_err(|e| MoqError::Session(format!("send_fetch_object: {e}")).into())
     }
 
@@ -324,22 +332,36 @@ impl DataPlaneHandle {
     }
 
     /// fetch header を Session に通知する (subscriber 側)
+    ///
+    /// draft-ietf-moq-transport-23 §11.4.1 (Fetch Header) は未知の Request ID の扱いを
+    /// MUST で定めておらず、Session は `FetchHeaderAcceptance::RequestNotRegistered` を返す。
+    /// momo-moq は fill fetch stream を開かないため要求未登録の fetch header は想定外であり、
+    /// 従来どおりエラーとして扱う。
     pub fn recv_fetch_header(
         &self,
         stream_id: DataStreamId,
         header: &FetchHeader,
     ) -> Result<(), BoxError> {
         let mut session = lock_session(&self.session);
-        session
-            .recv_fetch_header(stream_id, header)
-            .map_err(|e| MoqError::Session(format!("recv_fetch_header: {e}")).into())
+        match session.recv_fetch_header(stream_id, header) {
+            Ok(FetchHeaderAcceptance::Accepted) => Ok(()),
+            Ok(FetchHeaderAcceptance::RequestNotRegistered) => Err(MoqError::Session(format!(
+                "fetch header for unregistered request: stream_id={stream_id:?}"
+            ))
+            .into()),
+            Err(e) => Err(MoqError::Session(format!("recv_fetch_header: {e}")).into()),
+        }
     }
 
     /// fetch entry を Session に通知する (subscriber 側)
-    pub fn recv_fetch_entry(&self, stream_id: DataStreamId) -> Result<(), BoxError> {
+    pub fn recv_fetch_entry(
+        &self,
+        stream_id: DataStreamId,
+        entry: &DecodedFetchEntry,
+    ) -> Result<(), BoxError> {
         let mut session = lock_session(&self.session);
         session
-            .recv_fetch_entry(stream_id)
+            .recv_fetch_entry(stream_id, entry)
             .map_err(|e| MoqError::Session(format!("recv_fetch_entry: {e}")).into())
     }
 
@@ -413,7 +435,7 @@ fn lock_session(session: &Arc<StdMutex<Session>>) -> std::sync::MutexGuard<'_, S
 ///
 /// bidi request stream の先頭メッセージとして許されるのは SUBSCRIBE / PUBLISH /
 /// FETCH / TRACK_STATUS の 4 種類である
-/// (draft-ietf-moq-transport-21 §6.3 (Session initialization))。
+/// (draft-ietf-moq-transport-23 §6.3 (Session initialization))。
 fn request_id_of(message: &ControlMessage) -> Option<u64> {
     match message {
         ControlMessage::Subscribe(m) => Some(m.request_id),
@@ -426,7 +448,7 @@ fn request_id_of(message: &ControlMessage) -> Option<u64> {
 
 /// SETUP に載せる Setup Options を構築する
 ///
-/// draft-ietf-moq-transport-21 §9.1.1 (AUTHORITY) / §9.1.2 (PATH) は QUIC 直接接続では
+/// draft-ietf-moq-transport-23 §9.1.1 (AUTHORITY) / §9.1.2 (PATH) は QUIC 直接接続では
 /// authority と path を含めると定める。データグラムを送らないため MAX_FILTER_RANGES 等は
 /// 載せない。
 fn build_setup_options(server: &ServerUrl) -> shiguredo_moqt::parameter::SetupOptions {
@@ -488,9 +510,12 @@ impl MoqtClient {
             }
         };
         control_send
-            .send(Bytes::from(encode_control_stream_setup(&setup).map_err(
-                |e| MoqError::Session(format!("failed to encode SETUP: {e}")),
-            )?))
+            .send(Bytes::from(
+                // peer の SETUP を受信する前の送信上限は既定値を使う
+                // (draft-ietf-moq-transport-23 §9.1.8 (MAX_CONTROL_MESSAGE_SIZE))。
+                encode_control_stream_setup(&setup, DEFAULT_MAX_CONTROL_MESSAGE_SIZE)
+                    .map_err(|e| MoqError::Session(format!("failed to encode SETUP: {e}")))?,
+            ))
             .await?;
         tracing::info!(target: "moq", "sent SETUP message");
 
@@ -500,7 +525,8 @@ impl MoqtClient {
             .await
             .map_err(|e| MoqError::Quic(format!("failed to accept control stream: {e}")))?
             .ok_or_else(|| MoqError::Quic("connection closed before control stream".into()))?;
-        let mut control_recv = ControlStream::new(recv_stream);
+        let mut control_recv =
+            ControlStream::new(recv_stream, session.local_max_control_message_size());
         let stream_type = match control_recv.read_stream_type().await? {
             StreamRead::Value(stream_type) => stream_type,
             StreamRead::Closed(_) => {
@@ -541,12 +567,18 @@ impl MoqtClient {
         }
         tracing::info!(target: "moq", state = ?session.state(), "MOQT session established");
 
+        // 受信側の制御メッセージ上限は自側が SETUP で広告した値で決まる
+        let local_max_control_message_size = session.local_max_control_message_size();
         let session = Arc::new(StdMutex::new(session));
 
         // 制御ストリームの受信をタスク化する
         let (control_rx, _control_task) = spawn_control_recv_task(control_recv);
         let (bidi_tx, bidi_rx) = mpsc::channel::<BidiMessage>(64);
-        let _peer_bidi_task = spawn_peer_bidi_accept_task(acceptor.clone(), bidi_tx.clone());
+        let _peer_bidi_task = spawn_peer_bidi_accept_task(
+            acceptor.clone(),
+            bidi_tx.clone(),
+            local_max_control_message_size,
+        );
 
         let client = Self {
             session,
@@ -578,7 +610,7 @@ impl MoqtClient {
 
     /// PUBLISH を発行し、応答が返るまで待つ (publisher 側)
     ///
-    /// draft-ietf-moq-transport-21 §9.1 (PUBLISH) / §9.3 (REQUEST_OK)。
+    /// draft-ietf-moq-transport-23 §9.8 (PUBLISH) / §9.3 (REQUEST_OK)。
     pub async fn publish_track(
         &mut self,
         namespace: TrackNamespace,
@@ -610,7 +642,7 @@ impl MoqtClient {
 
     /// PUBLISH_DONE を送信する (publisher 側)
     ///
-    /// draft-ietf-moq-transport-21 §9.9 (PUBLISH_DONE)。
+    /// draft-ietf-moq-transport-23 §9.9 (PUBLISH_DONE)。
     pub async fn send_publish_done(
         &mut self,
         request_id: u64,
@@ -639,7 +671,7 @@ impl MoqtClient {
 
     /// トラックを SUBSCRIBE する (subscriber 側)
     ///
-    /// draft-ietf-moq-transport-21 §9.4 (SUBSCRIBE)。
+    /// draft-ietf-moq-transport-23 §9.6 (SUBSCRIBE)。
     pub async fn subscribe_track(
         &mut self,
         namespace: TrackNamespace,
@@ -683,7 +715,7 @@ impl MoqtClient {
     /// FETCH を発行し、応答が返るまで待つ (subscriber 側)
     ///
     /// 範囲は LOCATION_FILTER パラメータで指定する
-    /// (draft-ietf-moq-transport-21 §9.11 (FETCH) / §9.20.6 (LOCATION_FILTER))。
+    /// (draft-ietf-moq-transport-23 §9.11 (FETCH) / §9.19.9 (LOCATION FILTER Parameter))。
     pub async fn fetch(
         &mut self,
         namespace: TrackNamespace,
@@ -780,24 +812,19 @@ impl MoqtClient {
     }
 
     /// peer から届いた FETCH に FETCH_OK で応答する (publisher 側)
+    ///
+    /// draft-ietf-moq-transport-23 §9.3 (REQUEST_OK): 応答範囲の終端は Session が
+    /// 要求範囲と LARGEST_OBJECT から確定する。
     pub async fn send_fetch_ok(
         &mut self,
         request_id: u64,
-        end_of_track: u8,
-        end_location: Location,
         parameters: MessageParameters,
         track_properties: TrackProperties,
     ) -> Result<(), BoxError> {
         {
             let mut session = lock_session(&self.session);
             session
-                .send_fetch_ok(
-                    request_id,
-                    end_of_track,
-                    end_location,
-                    parameters,
-                    track_properties,
-                )
+                .send_fetch_ok(request_id, parameters, track_properties)
                 .map_err(|e| MoqError::Session(format!("send_fetch_ok: {e}")))?;
         }
         self.drain_events().await
@@ -805,7 +832,7 @@ impl MoqtClient {
 
     /// peer から届いた REQUEST_UPDATE に REQUEST_OK で応答する
     ///
-    /// draft-ietf-moq-transport-21 §9.5 (REQUEST_UPDATE) は REQUEST_OK または
+    /// draft-ietf-moq-transport-23 §9.5 (REQUEST_UPDATE) は REQUEST_OK または
     /// REQUEST_ERROR のいずれか 1 通を必ず返すと定める。
     pub async fn send_request_ok(&mut self, request_id: u64) -> Result<(), BoxError> {
         {
@@ -829,7 +856,7 @@ impl MoqtClient {
             let phrase = ReasonPhrase::new(reason)
                 .map_err(|e| MoqError::Session(format!("invalid reason phrase: {e}")))?;
             session
-                .send_request_error(request_id, error_code, 0, phrase, None)
+                .send_request_error(request_id, error_code, 0, phrase, ErrorDetails::new())
                 .map_err(|e| MoqError::Session(format!("send_request_error: {e}")))?;
         }
         self.drain_events().await
@@ -837,7 +864,7 @@ impl MoqtClient {
 
     /// FETCH 応答ストリームを開き、Object を 1 件書いて FIN する (publisher 側)
     ///
-    /// draft-ietf-moq-transport-21 §11.4.1 (Fetch Header): FETCH_OK を返した publisher は
+    /// draft-ietf-moq-transport-23 §11.4.1 (Fetch Header): FETCH_OK を返した publisher は
     /// 要求の Request ID を載せた FETCH_HEADER で応答 stream を開く。
     pub async fn send_fetch_response(
         &mut self,
@@ -859,7 +886,7 @@ impl MoqtClient {
             subgroup_id: FetchSubgroupIdMode::Zero,
             object_id: Some(object_id),
             // 最初の Object は prior Object を持たないため Publisher Priority を明示する
-            // (draft-ietf-moq-transport-21 §11.4.1.1 (Flags))
+            // (draft-ietf-moq-transport-23 §11.4.1.1 (Flags))
             publisher_priority: Some(128),
             has_properties: properties_data.is_some(),
             is_datagram_origin: false,
@@ -870,7 +897,13 @@ impl MoqtClient {
             .map_err(|e| MoqError::Session(format!("failed to encode fetch object: {e}")))?;
         buf.extend_from_slice(payload);
 
-        data_plane.send_fetch_object(stream_id)?;
+        data_plane.send_fetch_object(
+            stream_id,
+            &Location {
+                group_id,
+                object_id,
+            },
+        )?;
         stream.send(Bytes::from(buf)).await?;
         stream.finish().await?;
         data_plane.send_fetch_data_stream_closed(stream_id)?;
@@ -891,7 +924,7 @@ impl MoqtClient {
 
     /// 購読を停止する (subscriber 側)
     ///
-    /// draft-ietf-moq-transport-21 §6.4.2.3 (Request Cancellation and Rejection):
+    /// draft-ietf-moq-transport-23 §6.4.2.3 (Request Cancellation and Rejection):
     /// 送信方向は RESET_STREAM、受信方向は STOP_SENDING で打ち切る。
     pub async fn stop_sending(&mut self, request_id: u64) -> Result<(), BoxError> {
         {
@@ -946,7 +979,7 @@ impl MoqtClient {
 
     /// GOAWAY を送信する
     ///
-    /// draft-ietf-moq-transport-21 §9.2 (GOAWAY)。graceful shutdown の開始を通知する。
+    /// draft-ietf-moq-transport-23 §9.2 (GOAWAY)。graceful shutdown の開始を通知する。
     pub async fn send_goaway(
         &mut self,
         new_session_uri: Vec<u8>,
@@ -1100,9 +1133,18 @@ impl MoqtClient {
     /// Session のイベントキューを drain し、I/O 操作に変換する
     async fn drain_events(&mut self) -> Result<(), BoxError> {
         loop {
-            let event = {
+            // 送信上限 (peer の MAX_CONTROL_MESSAGE_SIZE) と受信上限 (自側の値) は
+            // イベントの取り出しと同じロックで読む。制御メッセージの encode には peer の
+            // 上限を、受信デコーダには自側の上限を渡す
+            // (draft-ietf-moq-transport-23 §9.1.8 (MAX_CONTROL_MESSAGE_SIZE))。
+            let (event, peer_max_control_message_size, local_max_control_message_size) = {
                 let mut session = lock_session(&self.session);
-                session.poll_event()
+                let event = session.poll_event();
+                (
+                    event,
+                    session.peer_control_message_size_limit().bytes(),
+                    session.local_max_control_message_size(),
+                )
             };
             let Some(event) = event else {
                 break;
@@ -1110,7 +1152,7 @@ impl MoqtClient {
             match event {
                 SessionEvent::SendControl(message) => {
                     let encoded = message
-                        .encode()
+                        .encode(peer_max_control_message_size)
                         .map_err(|e| MoqError::Session(format!("failed to encode message: {e}")))?;
                     self.control_send.send(Bytes::from(encoded)).await?;
                 }
@@ -1120,7 +1162,7 @@ impl MoqtClient {
                 } => {
                     let (mut send, recv) = self.handle.open_bidi_stream().await?;
                     let encoded = message
-                        .encode()
+                        .encode(peer_max_control_message_size)
                         .map_err(|e| MoqError::Session(format!("failed to encode request: {e}")))?;
                     send.send(Bytes::from(encoded)).await?;
                     self.bidi_sends.insert(request_id, send);
@@ -1128,7 +1170,7 @@ impl MoqtClient {
                     self.bidi_stop_txs.insert(request_id, stop_tx);
                     spawn_bidi_recv_task(
                         request_id,
-                        ControlStream::new(recv),
+                        ControlStream::new(recv, local_max_control_message_size),
                         self.bidi_tx.clone(),
                         stop_rx,
                     );
@@ -1140,9 +1182,10 @@ impl MoqtClient {
                 } => {
                     // 送信方向を FIN / RESET 済みの request では送信半が台帳に無いため no-op にする
                     if let Some(mut send) = self.bidi_sends.remove(&request_id) {
-                        let encoded = message.encode().map_err(|e| {
-                            MoqError::Session(format!("failed to encode response: {e}"))
-                        })?;
+                        let encoded =
+                            message.encode(peer_max_control_message_size).map_err(|e| {
+                                MoqError::Session(format!("failed to encode response: {e}"))
+                            })?;
                         send.send(Bytes::from(encoded)).await?;
                         if fin {
                             send.finish().await?;
@@ -1209,9 +1252,21 @@ impl MoqtClient {
                 | SessionEvent::FetchOkReceived { .. }
                 | SessionEvent::SendPaddingStream { .. }
                 | SessionEvent::OpenFillFetchStream { .. }
-                | SessionEvent::SendPaddingDatagram { .. } => {
+                | SessionEvent::SendPaddingDatagram { .. }
+                | SessionEvent::PublishNamespaceReceived { .. }
+                | SessionEvent::SubscribeNamespaceReceived { .. }
+                | SessionEvent::SubscribeTracksReceived { .. }
+                | SessionEvent::NamespaceReceived { .. }
+                | SessionEvent::NamespaceDoneReceived { .. }
+                | SessionEvent::PublishSkippedReceived { .. }
+                | SessionEvent::TrackStatusUnsupported { .. }
+                | SessionEvent::GoawayDrainReady
+                | SessionEvent::StopSendingDataStream { .. } => {
                     // 応答の成否は subscription / fetch の状態で判断するため、
-                    // ここでは個別の処理を行わない
+                    // ここでは個別の処理を行わない。namespace 系の要求と TRACK_STATUS は
+                    // momo-moq が発行しないため無視する。Session 起点の STOP_SENDING は
+                    // data stream の受信タスクが stream を所有しており、ここから送る経路が
+                    // ないため無視する
                 }
             }
         }
@@ -1334,6 +1389,7 @@ fn spawn_bidi_recv_task(
 fn spawn_peer_bidi_accept_task(
     acceptor: StreamAcceptor,
     tx: mpsc::Sender<BidiMessage>,
+    max_control_message_size: u64,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
@@ -1348,7 +1404,7 @@ fn spawn_peer_bidi_accept_task(
             let (send, recv) = pair;
             let tx = tx.clone();
             tokio::spawn(async move {
-                let mut stream = ControlStream::new(recv);
+                let mut stream = ControlStream::new(recv, max_control_message_size);
                 // 先頭メッセージが request の開始メッセージである
                 let first = match stream.recv_message().await {
                     Ok(StreamRead::Value(message)) => message,

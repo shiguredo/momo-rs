@@ -1,8 +1,8 @@
 //! MOQT の QUIC トランスポート
 //!
 //! `tobi-quic` のストリーム操作を MOQT から使う形に薄くラップする。
-//! ストリームの役割は draft-ietf-moq-transport-21 §6.3 (Session initialization) /
-//! §6.4 (Streams) に従う。draft 由来のため将来の改版で変わる可能性がある。
+//! ストリームの役割は draft-ietf-moq-transport-23 §6.3 (Session initialization) /
+//! §6.4 (Stream Usage) に従う。draft 由来のため将来の改版で変わる可能性がある。
 
 use std::sync::Arc;
 
@@ -70,7 +70,7 @@ impl SendStream {
     /// ストリームの送信方向を RESET_STREAM で打ち切る
     ///
     /// `error_code` は MOQT の Stream Reset Error Code
-    /// (draft-ietf-moq-transport-21 §12.5) を QUIC の application error に載せる。
+    /// (draft-ietf-moq-transport-23 §12.5) を QUIC の application error に載せる。
     pub async fn reset(&mut self, error_code: u64) -> Result<(), MoqError> {
         self.stream
             .reset_stream(error_code)
@@ -130,7 +130,7 @@ impl RecvStream {
 
     /// 受信方向へ STOP_SENDING を送出する
     ///
-    /// draft-ietf-moq-transport-21 §6.4.2.3 (Request Cancellation and Rejection):
+    /// draft-ietf-moq-transport-23 §6.4.2.3 (Request Cancellation and Rejection):
     /// 受信方向の cancel は STOP_SENDING で行う。draft 由来のため将来の改版で変わる可能性がある。
     pub async fn stop_sending(&mut self, error_code: u64) -> Result<(), MoqError> {
         self.stream
@@ -175,7 +175,7 @@ impl StreamHandle {
 
     /// 双方向ストリームを開く
     ///
-    /// draft-ietf-moq-transport-21 §6.3 (Session initialization): PUBLISH / SUBSCRIBE /
+    /// draft-ietf-moq-transport-23 §6.3 (Session initialization): PUBLISH / SUBSCRIBE /
     /// FETCH の要求メッセージは双方向ストリームで送受信する。
     pub async fn open_bidi_stream(&self) -> Result<(SendStream, RecvStream), MoqError> {
         let stream = self

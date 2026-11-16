@@ -4,7 +4,7 @@
 //! SUBSCRIBE して受信した Object を復号し、raw_player で表示・再生する。
 //! 映像は H.264 (avc1、4 バイト長プレフィックス、パラメーターセットは Video Config)、
 //! 音声は Opus (Audio Config に OpusHead) を前提とする
-//! (draft-ietf-moq-loc-04 §2.1.3 / §2.3.1 / §2.3.2)。draft 由来のため将来の改版で
+//! (draft-ietf-moq-loc-05 §2.1.3 / §2.3.1 / §2.3.2)。draft 由来のため将来の改版で
 //! 変わる可能性がある。
 
 use std::collections::HashMap;
@@ -21,6 +21,7 @@ use shiguredo_moqt::message_parameter::{
     PARAM_LOCATION_FILTER,
 };
 use shiguredo_moqt::msf::MsfCatalog;
+use shiguredo_moqt::parameter::DEFAULT_MAX_CONTROL_MESSAGE_SIZE;
 use shiguredo_moqt::session::types::{DataStreamId, SessionEvent, TrackDataAcceptance};
 use shiguredo_moqt::stream::decoder::{
     DecodedSubgroupObject, FetchStreamDecoder, SubgroupStreamDecoder,
@@ -434,7 +435,7 @@ async fn decode_catalog_stream(
                 },
             }
         };
-        data_plane.recv_fetch_entry(stream_id)?;
+        data_plane.recv_fetch_entry(stream_id, &entry)?;
         let payload_length = match &entry {
             shiguredo_moqt::stream::decoder::DecodedFetchEntry::Object(object) => {
                 object.payload_length
@@ -849,7 +850,10 @@ async fn drain_stream(
 /// 読み込んだバイト列は戻り値に含める。varint を消費してしまうと Subgroup / Fetch の
 /// デコーダに先頭バイトを渡せないため、蓄積したバッファをそのまま引き継ぐ。
 async fn peek_stream_type(stream: &mut RecvStream) -> Result<(u64, Vec<u8>), BoxError> {
-    let mut decoder = MessageDecoder::new();
+    // ここではストリームタイプの varint だけを読むため制御メッセージ長の上限は使われない。
+    // デコーダの生成には既定値を渡す
+    // (draft-ietf-moq-transport-23 §9.1.8 (MAX_CONTROL_MESSAGE_SIZE))。
+    let mut decoder = MessageDecoder::new(DEFAULT_MAX_CONTROL_MESSAGE_SIZE);
     let mut buf = Vec::new();
     loop {
         if let Some(value) = decoder
@@ -886,7 +890,7 @@ fn parse_loc_properties(bytes: Option<&[u8]>) -> Result<Option<LocProperties>, B
 /// LOC の Timestamp / Timescale から表示時刻 (マイクロ秒) を計算する
 ///
 /// Timescale が無い場合は Timestamp がマイクロ秒であるとみなす
-/// (draft-ietf-moq-loc-04 §2.3.1.1)。draft 由来のため将来の改版で変わる可能性がある。
+/// (draft-ietf-moq-loc-05 §2.3.1.1)。draft 由来のため将来の改版で変わる可能性がある。
 fn compute_pts_us(properties: Option<&LocProperties>) -> Option<i64> {
     let properties = properties?;
     let timestamp = properties.timestamp()?;

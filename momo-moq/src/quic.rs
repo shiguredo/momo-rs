@@ -18,9 +18,9 @@ use crate::url::ServerUrl;
 
 /// MOQT の ALPN プロトコル識別子
 ///
-/// `draft-ietf-moq-transport-21` §6.2 (Session establishment) が ALPN を `moqt-21` と定める。
+/// `draft-ietf-moq-transport-23` §6.2 (Session establishment) が ALPN を `moqt-23` と定める。
 /// ALPN は draft 版ごとに変わるため、接続先の実装と同じ版に合わせる必要がある。
-const MOQT_ALPN: &[u8] = b"moqt-21";
+const MOQT_ALPN: &[u8] = b"moqt-23";
 
 /// ピアが開ける単方向ストリームの累積上限
 ///

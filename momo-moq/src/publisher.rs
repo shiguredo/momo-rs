@@ -3,7 +3,7 @@
 //! `momo-moq publish` の実装。映像 (H.264 / avc1) と音声 (Opus) をキャプチャして
 //! エンコードし、MSF カタログとともに MOQT relay へ publish する。
 //! payload は 4 バイト長プレフィックス形式、パラメーターセットは Video Config (0x0D) に
-//! 載せる (draft-ietf-moq-loc-04 §2.1.3 / §2.1.2)。draft 由来のため将来の改版で
+//! 載せる (draft-ietf-moq-loc-05 §2.1.3 / §2.1.2)。draft 由来のため将来の改版で
 //! 変わる可能性がある。
 
 use std::time::{Duration, Instant};
@@ -17,7 +17,7 @@ use shiguredo_moqt::loc::{
     PROP_TIMESTAMP, PROP_VIDEO_CONFIG, PROP_VIDEO_FRAME_MARKING,
 };
 use shiguredo_moqt::message::ControlMessage;
-use shiguredo_moqt::message::common::{Location, TrackNamespace};
+use shiguredo_moqt::message::common::TrackNamespace;
 use shiguredo_moqt::message_parameter::MessageParameters;
 use shiguredo_moqt::session::types::{DataStreamId, DataStreamResetReason, RequestStreamEnd};
 use shiguredo_moqt::stream::subgroup::{SubgroupHeader, SubgroupIdMode, SubgroupObject};
@@ -50,7 +50,7 @@ const VIDEO_TRACK_NAME: &[u8] = b"video";
 const AUDIO_TRACK_NAME: &[u8] = b"audio";
 /// 映像の Timescale
 ///
-/// draft-ietf-moq-loc-04 §2.3.1.2 は 90000 を例示する。映像は 90000、
+/// draft-ietf-moq-loc-05 §2.3.1.2 は 90000 を例示する。映像は 90000、
 /// 音声はサンプリングレート (48000) を使う。
 const VIDEO_TIMESCALE: u64 = 90_000;
 /// 映像と音声を送る Subgroup の Publisher Priority
@@ -248,7 +248,7 @@ impl SubgroupWriter {
     ///
     /// 1 つも Object を送っていない場合とフィルタでスキップした Object がある場合は、
     /// Group が不完全になるため FIN ではなく RESET で閉じる
-    /// (draft-ietf-moq-transport-21 §11.3.2 (Closing Subgroup Streams))。
+    /// (draft-ietf-moq-transport-23 §11.3.2 (Closing Subgroup Streams))。
     async fn finish(mut self) -> Result<(), BoxError> {
         if !self.header_sent || self.skipped {
             let error_code = DataStreamResetReason::Cancelled.error_code();
@@ -616,7 +616,7 @@ impl Publisher {
         };
 
         let mut properties = LocProperties::new();
-        // フレーム種別は Video Frame Marking (draft-ietf-moq-loc-04 §2.3.2.2 / RFC 9626) で通知する。
+        // フレーム種別は Video Frame Marking (draft-ietf-moq-loc-05 §2.3.2.2 / RFC 9626) で通知する。
         // 1 object = 1 frame のため S と E は常に 1、I はキーフレームのときだけ 1
         // (I ビット = 0x20)。LOC の奇数 ID はバイト列で載せる。
         let frame_marking: u8 = if output.is_keyframe { 0xE0 } else { 0xC0 };
@@ -691,7 +691,7 @@ impl Publisher {
 
     /// 音声 Object を送る
     ///
-    /// draft-ietf-moq-loc-04 §4.1 の例に合わせ、1 Opus パケットを 1 Object / 1 Group で送る。
+    /// draft-ietf-moq-loc-05 §4.1 の例に合わせ、1 Opus パケットを 1 Object / 1 Group で送る。
     async fn send_audio_object(&mut self, packet: &[u8], timestamp: u64) -> Result<(), BoxError> {
         let request_id = self
             .audio_request_id
@@ -833,17 +833,13 @@ impl Publisher {
                             .await?;
                         return Ok(());
                     };
+                    // カタログは object 0 だけを返すため、応答範囲の終端を LARGEST_OBJECT で
+                    // {group 0, object 0} に確定する
+                    // (draft-ietf-moq-transport-23 §9.19.17 (LARGEST OBJECT Parameter))。
+                    let mut parameters = MessageParameters::new();
+                    parameters.set_largest_object(0, 0);
                     self.client
-                        .send_fetch_ok(
-                            request.request_id,
-                            0,
-                            Location {
-                                group_id: 0,
-                                object_id: 0,
-                            },
-                            MessageParameters::new(),
-                            TrackProperties::new(),
-                        )
+                        .send_fetch_ok(request.request_id, parameters, TrackProperties::new())
                         .await?;
                     self.client
                         .send_fetch_response(request.request_id, 0, 0, &bytes, None)

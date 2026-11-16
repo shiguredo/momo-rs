@@ -1,7 +1,7 @@
 //! H.264 の NAL 変換と AVCDecoderConfigurationRecord の取り扱い
 //!
 //! MOQT の映像トラックは avc1 で送る。payload は 4 バイト長プレフィックス形式
-//! (canonical、draft-ietf-moq-loc-04 §2.1.3)、パラメーターセットは Video Config (0x0D) に
+//! (canonical、draft-ietf-moq-loc-05 §2.1.3)、パラメーターセットは Video Config (0x0D) に
 //! AVCDecoderConfigurationRecord として載せる。LOC は draft 由来のため将来の改版で
 //! 変わる可能性がある。
 //!
