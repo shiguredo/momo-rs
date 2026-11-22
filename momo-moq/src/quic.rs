@@ -24,9 +24,8 @@ const MOQT_ALPN: &[u8] = b"moqt-23";
 
 /// ピアが開ける単方向ストリームの累積上限
 ///
-/// relay は audio を 20ms ごと、video を 1 frame ごとに 1 本の subgroup stream で
-/// 送るため、stream の消費速度が上限の回復速度を上回り得る。s2n-quic の既定
-/// (100 本) では購読が数秒から数十秒で止まるため、余裕を持たせる。
+/// リレーは音声を 20 ms ごと、映像を 1 フレームごとに 1 本の subgroup stream で送る。
+/// 新しいストリームの消費が上限の更新より速い場合でも、購読が止まりにくいよう余裕を持たせる。
 const INITIAL_MAX_STREAMS_UNI: u64 = 10_000;
 
 /// ピアが開ける双方向ストリームの累積上限
@@ -46,8 +45,7 @@ const INITIAL_MAX_STREAM_DATA: u64 = 16 * 1024 * 1024;
 
 /// アイドルタイムアウト (ミリ秒)
 ///
-/// tobi-quic の既定は 0 (無効) であり、そのままでは応答しない peer との接続が
-/// 残り続ける。s2n-quic の既定 (30 秒) に合わせる。
+/// tobi-quic の既定は 0 (無効) なので、通信のない接続を保持し続けないよう 30 秒を指定する。
 const MAX_IDLE_TIMEOUT_MS: u64 = 30_000;
 
 /// QUIC 接続を確立する
@@ -92,10 +90,8 @@ pub async fn connect(
         // DATAGRAM の受信を広告する。momo-moq 自身は datagram を送らないが、
         // relay が datagram での配信可否を判断できるようにしておく
         .with_datagram(DatagramConfig::default())
-        // s2n-quic の endpoint はアプリとは独立したタスクで常時ソケットを駆動していた。
-        // tobi-quic の既定はコマンド駆動であり、アプリが API を呼んでいない間は受信と
-        // タイマーを処理しないため、同じ挙動になるよう接続生成時からバックグラウンド
-        // 駆動を有効にする。無効のままだと ACK や再送が止まる
+        // tobi-quic の既定はコマンド駆動なので、アプリが API を呼ばない間も
+        // 受信、ACK、再送タイマーを処理できるようバックグラウンド駆動を有効にする。
         .with_background_driver(true)
         .start()
         .map_err(|e| MoqError::Quic(format!("failed to start QUIC client: {e}")))?;
