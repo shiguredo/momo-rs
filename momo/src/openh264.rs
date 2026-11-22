@@ -9,7 +9,7 @@ use shiguredo_webrtc::{
     H264PacketizationMode, I420Buffer, SdpVideoFormat, SdpVideoFormatRef, VideoCodecRef,
     VideoCodecStatus, VideoDecoder, VideoDecoderDecodedImageCallbackPtr, VideoDecoderDecoderInfo,
     VideoDecoderFactory, VideoDecoderFactoryHandler, VideoDecoderHandler, VideoDecoderSettingsRef,
-    VideoEncoder, VideoEncoderEncodedImageCallbackPtr, VideoEncoderEncodedImageCallbackRef,
+    VideoEncoder, VideoEncoderEncodedImageCallbackPtr, VideoEncoderEncodedImageCallbackRefMut,
     VideoEncoderEncoderInfo, VideoEncoderFactory, VideoEncoderFactoryHandler, VideoEncoderHandler,
     VideoEncoderRateControlParametersRef, VideoEncoderSettingsRef, VideoFrameRef, VideoFrameType,
     VideoFrameTypeVectorRef,
@@ -232,10 +232,12 @@ impl VideoEncoderHandler for Openh264H264Encoder {
 
     fn register_encode_complete_callback(
         &mut self,
-        callback: Option<VideoEncoderEncodedImageCallbackRef<'_>>,
+        callback: Option<VideoEncoderEncodedImageCallbackRefMut<'_>>,
     ) -> VideoCodecStatus {
+        // SAFETY: WebRTC は登録中のコールバックを有効に保つ。再登録時は既存ポインタを
+        // 置き換え、release 時に破棄するため、登録期間外には呼び出さない。
         self.callback =
-            callback.map(|cb| unsafe { VideoEncoderEncodedImageCallbackPtr::from_ref(cb) });
+            callback.map(|cb| unsafe { VideoEncoderEncodedImageCallbackPtr::from_mut(&cb) });
         VideoCodecStatus::Ok
     }
 
@@ -510,12 +512,11 @@ fn deliver_decoded_frame(
     }
 
     let timestamp_us = rtp_timestamp as i64 * 1000 / 90;
-    let frame = crate::webrtc_video::video_frame_from_i420(&i420, timestamp_us, rtp_timestamp);
+    let mut frame = crate::webrtc_video::video_frame_from_i420(&i420, timestamp_us, rtp_timestamp);
 
-    // SAFETY: callback ポインタは register_decode_complete_callback で渡されたもので、
-    // release が呼ばれるまで有効である。
+    // SAFETY: callback は登録中の有効なポインタで、frame はこの呼び出しの間だけ可変借用する。
     unsafe {
-        callback.decoded(frame.as_ref());
+        callback.decoded(frame.as_mut());
     }
 }
 

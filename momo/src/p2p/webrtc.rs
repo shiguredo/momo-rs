@@ -384,7 +384,7 @@ fn create_peer_inner(
     if !no_google_stun {
         let mut ice_server = IceServer::new();
         ice_server.add_url("stun:stun.l.google.com:19302");
-        rtc_config.servers().push(&ice_server);
+        rtc_config.servers_mut().push(&ice_server);
     }
 
     let deps = PeerConnectionDependencies::new(&observer);

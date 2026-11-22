@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use shiguredo_webrtc::{
-    AdaptedVideoTrackSource, AudioDeviceModule, AudioDeviceModuleHandler, AudioTransportRef,
+    AdaptedVideoTrackSource, AudioDeviceModule, AudioDeviceModuleHandler, AudioTransportPtr,
     I420Buffer,
 };
 
@@ -140,7 +140,8 @@ impl BeepTrigger {
 #[derive(Clone)]
 struct FakeAudioState {
     recording: Arc<AtomicBool>,
-    audio_transport: Arc<std::sync::Mutex<Option<AudioTransportRef>>>,
+    // 録音スレッド上の同期呼び出しが終わるまで、登録解除が待てるよう同じロックを使う。
+    audio_transport: Arc<std::sync::Mutex<Option<AudioTransportPtr>>>,
     beep_trigger: BeepTrigger,
     stop: Arc<AtomicBool>,
 }
@@ -158,11 +159,11 @@ pub(crate) struct FakeAudioCapturer {
 
 struct FakeAudioHandler {
     recording: Arc<AtomicBool>,
-    audio_transport: Arc<std::sync::Mutex<Option<AudioTransportRef>>>,
+    audio_transport: Arc<std::sync::Mutex<Option<AudioTransportPtr>>>,
 }
 
 impl AudioDeviceModuleHandler for FakeAudioHandler {
-    fn register_audio_callback(&self, transport: Option<AudioTransportRef>) -> i32 {
+    fn register_audio_callback(&mut self, transport: Option<AudioTransportPtr>) -> i32 {
         let mut stored = self
             .audio_transport
             .lock()
@@ -171,23 +172,23 @@ impl AudioDeviceModuleHandler for FakeAudioHandler {
         0
     }
 
-    fn init(&self) -> i32 {
+    fn init(&mut self) -> i32 {
         0
     }
 
-    fn terminate(&self) -> i32 {
-        0
+    fn terminate(&mut self) -> i32 {
+        self.register_audio_callback(None)
     }
 
-    fn initialized(&self) -> bool {
+    fn initialized(&mut self) -> bool {
         true
     }
 
-    fn recording_devices(&self) -> i16 {
+    fn recording_devices(&mut self) -> i16 {
         1
     }
 
-    fn recording_device_name(&self, index: u16) -> Option<(String, String)> {
+    fn recording_device_name(&mut self, index: u16) -> Option<(String, String)> {
         if index == 0 {
             Some(("Fake Recording".to_string(), "fake-recording".to_string()))
         } else {
@@ -195,30 +196,30 @@ impl AudioDeviceModuleHandler for FakeAudioHandler {
         }
     }
 
-    fn recording_is_available(&self, available: &mut bool) -> i32 {
+    fn recording_is_available(&mut self, available: &mut bool) -> i32 {
         *available = true;
         0
     }
 
-    fn init_recording(&self) -> i32 {
+    fn init_recording(&mut self) -> i32 {
         0
     }
 
-    fn recording_is_initialized(&self) -> bool {
+    fn recording_is_initialized(&mut self) -> bool {
         true
     }
 
-    fn start_recording(&self) -> i32 {
+    fn start_recording(&mut self) -> i32 {
         self.recording.store(true, Ordering::SeqCst);
         0
     }
 
-    fn stop_recording(&self) -> i32 {
+    fn stop_recording(&mut self) -> i32 {
         self.recording.store(false, Ordering::SeqCst);
         0
     }
 
-    fn recording(&self) -> bool {
+    fn recording(&mut self) -> bool {
         self.recording.load(Ordering::SeqCst)
     }
 }
@@ -316,17 +317,15 @@ fn audio_thread(state: FakeAudioState) {
 
         // WebRTC に送信
         if state.recording.load(Ordering::SeqCst) {
-            let transport = {
-                let stored = state
-                    .audio_transport
-                    .lock()
-                    .expect(AUDIO_TRANSPORT_LOCK_POISONED);
-                *stored
-            };
-            if let Some(transport) = transport {
+            let transport_guard = state
+                .audio_transport
+                .lock()
+                .expect(AUDIO_TRANSPORT_LOCK_POISONED);
+            if let Some(transport) = transport_guard.as_ref() {
                 let mut new_mic_level = 0;
-                // SAFETY: buffer は有効な i16 スライスであり、WebRTC の AudioTransport に
-                // 10ms 分の PCM データを渡すだけなのでメモリ安全。
+                // 安全性: 同じロックで登録解除を待たせるため、transport は呼び出しが
+                // 終わるまで有効。buffer は必要な長さの i16 に整列した PCM であり、
+                // new_mic_level は書き込み可能なローカル変数。
                 let _ = unsafe {
                     transport.recorded_data_is_available(
                         buffer.as_ptr() as *const u8,

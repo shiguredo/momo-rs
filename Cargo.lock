@@ -1196,9 +1196,9 @@ dependencies = [
 
 [[package]]
 name = "shiguredo_webrtc"
-version = "0.152.1-canary.3"
+version = "0.155.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46fda0501e3a1edb96651f2dce17cbc14b182b1a08384c0e85587383f865c38e"
+checksum = "43b8e6bf118e96bdd35c7a0852b7e482476b3a1d0d2fc0189479340441c25156"
 dependencies = [
  "bindgen 0.72.1",
  "nojson",
@@ -1264,9 +1264,9 @@ dependencies = [
 
 [[package]]
 name = "sora_sdk"
-version = "2026.2.0-canary.3"
+version = "2026.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c32c3847516314234c0d2364410e0f5f331fd3c5ccc2871841690cd9cfbdb6f1"
+checksum = "9f77e5a9a75cb90d2e40d46f12bd64bc94c220276deeba329ecb56923044e7b8"
 dependencies = [
  "aws-lc-rs",
  "noflate",

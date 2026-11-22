@@ -17,9 +17,9 @@ use sora_sdk::NvCodecVideoCodecCapability;
 #[cfg(feature = "vpl")]
 use sora_sdk::VplVideoCodecCapability;
 use sora_sdk::{
-    AdmConfig, Audio, CodecDirection, ConnectDataChannel, ForwardingFilter, JsonString, ProxyInfo,
-    Role, SoraConnection, SoraConnectionContext, SoraConnectionContextConfig, Video,
-    VideoCodecImplementation, VideoCodecPreference,
+    AdmConfig, Audio, CodecDirection, ConnectDataChannel, DisconnectReason, ForwardingFilter,
+    JsonString, ProxyInfo, Role, SoraConnection, SoraConnectionContext,
+    SoraConnectionContextConfig, Video, VideoCodecImplementation, VideoCodecPreference,
 };
 use tokio::sync::{mpsc, oneshot};
 use tracing::{info, warn};
@@ -217,7 +217,18 @@ pub async fn run(
         }
 
         match connect(&config, &prepared, metrics_state.as_ref(), &connected).await {
-            Ok(()) => info!(target: "sora", "connection finished"),
+            Ok(reason) => {
+                // ピアが指定できる切断メッセージやラベルは出力せず、SDK が分類した理由だけを記録する。
+                let reason = match reason {
+                    DisconnectReason::ClientDisconnect => "client_disconnect",
+                    DisconnectReason::ServerClose { .. } => "server_close",
+                    DisconnectReason::SignalingError { .. } => "signaling_error",
+                    DisconnectReason::WebSocketClosed { .. } => "websocket_closed",
+                    DisconnectReason::DataChannelClosed { .. } => "data_channel_closed",
+                    DisconnectReason::PeerConnectionFailed => "peer_connection_failed",
+                };
+                info!(target: "sora", reason, "connection finished");
+            }
             Err(error) => warn!(target: "sora", error = %error, "connection failed"),
         }
 
@@ -302,7 +313,7 @@ async fn connect(
     prepared: &Prepared,
     metrics_state: Option<&Arc<MetricsState>>,
     connected: &Arc<AtomicBool>,
-) -> Result<(), BoxError> {
+) -> Result<DisconnectReason, BoxError> {
     // フェイク映像とフェイク音声を同期させるトリガーは接続ごとに作り直す
     let beep_trigger = if config.fake_capture_device && !config.no_audio_device {
         Some(crate::fake::BeepTrigger::new())

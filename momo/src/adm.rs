@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use shiguredo_audio_device::{
     AudioDeviceList, AudioFormat, AudioFrame, AudioPlayback, AudioPlaybackConfig, PlaybackFrame,
 };
-use shiguredo_webrtc::{AudioDeviceModuleHandler, AudioParameters, AudioTransportRef};
+use shiguredo_webrtc::{AudioDeviceModuleHandler, AudioParameters, AudioTransportPtr};
 use tracing::{info, warn};
 
 use crate::audio_device::resolve_audio_device_in_list;
@@ -29,7 +29,9 @@ const PLAYOUT_DEVICE_SPEC_LOCK_POISONED: &str = "playout_device_spec lock poison
 #[derive(Clone)]
 pub struct AdmState {
     recording: Arc<AtomicBool>,
-    audio_transport: Arc<Mutex<Option<AudioTransportRef>>>,
+    // 音声デバイスの同期コールバックと WebRTC の登録・解除を直列化する。
+    // チャネルで別スレッドに委ねず、ポインターの参照中は解除側を待たせる。
+    audio_transport: Arc<Mutex<Option<AudioTransportPtr>>>,
     playout: Arc<AtomicBool>,
     audio_playback: Arc<Mutex<Option<AudioPlayback>>>,
     playout_device_spec: Arc<Mutex<Option<String>>>,
@@ -60,30 +62,26 @@ impl AdmState {
     }
 
     /// 録音データを WebRTC の AudioTransport に転送する
-    pub fn on_recorded_data(
-        &self,
-        audio_data: *const u8,
-        n_samples: usize,
-        n_bytes_per_sample: usize,
-        n_channels: usize,
-        samples_per_sec: u32,
-    ) {
+    fn on_recorded_data(&self, samples: &[i16], n_channels: usize, samples_per_sec: u32) {
         if !self.recording.load(Ordering::SeqCst) {
             return;
         }
-        let transport = {
-            *self
-                .audio_transport
-                .lock()
-                .expect(AUDIO_TRANSPORT_LOCK_POISONED)
+        let transport_guard = self
+            .audio_transport
+            .lock()
+            .expect(AUDIO_TRANSPORT_LOCK_POISONED);
+        let Some(transport) = transport_guard.as_ref() else {
+            return;
         };
-        let Some(transport) = transport else { return };
         let mut new_mic_level = 0u32;
+        // 安全性: 登録解除は同じロックを取得するため、呼び出しが終わるまで
+        // C++ 側の transport は有効。入力は i16 に整列した PCM で、チャンネルごとの
+        // フレーム数はスライス長から求める。出力先は書き込み可能なローカル変数。
         let _ = unsafe {
             transport.recorded_data_is_available(
-                audio_data,
-                n_samples,
-                n_bytes_per_sample,
+                samples.as_ptr().cast(),
+                samples.len() / n_channels,
+                size_of::<i16>() * n_channels,
                 n_channels,
                 samples_per_sec,
                 0,
@@ -100,31 +98,27 @@ impl AdmState {
     ///
     /// S16 はそのまま転送し、F32 は S16 に変換してから転送する。
     pub fn on_audio_frame(&self, frame: &AudioFrame<'_>) {
+        // WebRTC の AudioTransport はモノラルとステレオを受け付ける。
+        if !(1..=2).contains(&frame.channels) {
+            return;
+        }
         let n_channels = frame.channels as usize;
-        let samples_per_sec = frame.sample_rate as u32;
+        let Ok(samples_per_sec) = u32::try_from(frame.sample_rate) else {
+            return;
+        };
         match frame.format {
             AudioFormat::S16 => {
-                self.on_recorded_data(
-                    frame.data.as_ptr(),
-                    frame.frames as usize,
-                    2 * n_channels,
-                    n_channels,
-                    samples_per_sec,
-                );
+                if let Some(samples) = frame.as_s16() {
+                    self.on_recorded_data(samples, n_channels, samples_per_sec);
+                }
             }
             AudioFormat::F32 => {
-                if let Some(f32_data) = frame.as_f32() {
-                    let s16: Vec<i16> = f32_data
+                if let Some(samples) = frame.as_f32() {
+                    let converted: Vec<i16> = samples
                         .iter()
-                        .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                        .map(|&sample| (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
                         .collect();
-                    self.on_recorded_data(
-                        s16.as_ptr() as *const u8,
-                        frame.frames as usize,
-                        2 * n_channels,
-                        n_channels,
-                        samples_per_sec,
-                    );
+                    self.on_recorded_data(&converted, n_channels, samples_per_sec);
                 }
             }
         }
@@ -174,12 +168,10 @@ struct ExternalAdmHandler {
     state: AdmState,
 }
 
-// SAFETY: AudioTransportRef は WebRTC 内部で排他制御されているため
-// ExternalAdmHandler をスレッド間で共有しても安全である。
-unsafe impl Sync for ExternalAdmHandler {}
-
 impl AudioDeviceModuleHandler for ExternalAdmHandler {
-    fn register_audio_callback(&self, audio_transport: Option<AudioTransportRef>) -> i32 {
+    fn register_audio_callback(&mut self, audio_transport: Option<AudioTransportPtr>) -> i32 {
+        // WebRTC は transport を破棄する前に None を渡す。進行中の呼び出しを
+        // 待ってからポインターを外し、その後のコールバックには触らせない。
         *self
             .state
             .audio_transport
@@ -188,25 +180,25 @@ impl AudioDeviceModuleHandler for ExternalAdmHandler {
         0
     }
 
-    fn init(&self) -> i32 {
+    fn init(&mut self) -> i32 {
         0
     }
 
-    fn terminate(&self) -> i32 {
-        0
+    fn terminate(&mut self) -> i32 {
+        self.register_audio_callback(None)
     }
 
-    fn initialized(&self) -> bool {
+    fn initialized(&mut self) -> bool {
         true
     }
 
     // ── 録音方向 ──
 
-    fn recording_devices(&self) -> i16 {
+    fn recording_devices(&mut self) -> i16 {
         1
     }
 
-    fn recording_device_name(&self, index: u16) -> Option<(String, String)> {
+    fn recording_device_name(&mut self, index: u16) -> Option<(String, String)> {
         if index == 0 {
             Some((
                 "External Recording".to_string(),
@@ -217,51 +209,51 @@ impl AudioDeviceModuleHandler for ExternalAdmHandler {
         }
     }
 
-    fn recording_is_available(&self, available: &mut bool) -> i32 {
+    fn recording_is_available(&mut self, available: &mut bool) -> i32 {
         *available = true;
         0
     }
 
-    fn init_recording(&self) -> i32 {
+    fn init_recording(&mut self) -> i32 {
         0
     }
 
-    fn recording_is_initialized(&self) -> bool {
+    fn recording_is_initialized(&mut self) -> bool {
         true
     }
 
-    fn start_recording(&self) -> i32 {
+    fn start_recording(&mut self) -> i32 {
         self.state.recording.store(true, Ordering::SeqCst);
         0
     }
 
-    fn stop_recording(&self) -> i32 {
+    fn stop_recording(&mut self) -> i32 {
         self.state.recording.store(false, Ordering::SeqCst);
         0
     }
 
-    fn recording(&self) -> bool {
+    fn recording(&mut self) -> bool {
         self.state.recording.load(Ordering::SeqCst)
     }
 
     // ── 再生方向 ──
 
-    fn playout_devices(&self) -> i16 {
+    fn playout_devices(&mut self) -> i16 {
         let devices = self.state.playout_device_list();
         devices.len() as i16
     }
 
-    fn playout_device_name(&self, index: u16) -> Option<(String, String)> {
+    fn playout_device_name(&mut self, index: u16) -> Option<(String, String)> {
         let devices = self.state.playout_device_list();
         devices.get(index as usize).cloned()
     }
 
-    fn playout_is_available(&self, available: &mut bool) -> i32 {
+    fn playout_is_available(&mut self, available: &mut bool) -> i32 {
         *available = true;
         0
     }
 
-    fn init_playout(&self) -> i32 {
+    fn init_playout(&mut self) -> i32 {
         let state = &self.state;
 
         let device_list = state.playout_device_list();
@@ -305,7 +297,7 @@ impl AudioDeviceModuleHandler for ExternalAdmHandler {
         }
     }
 
-    fn playout_is_initialized(&self) -> bool {
+    fn playout_is_initialized(&mut self) -> bool {
         self.state
             .audio_playback
             .lock()
@@ -313,7 +305,7 @@ impl AudioDeviceModuleHandler for ExternalAdmHandler {
             .is_some()
     }
 
-    fn start_playout(&self) -> i32 {
+    fn start_playout(&mut self) -> i32 {
         let state = &self.state;
         {
             let mut guard = state
@@ -334,7 +326,7 @@ impl AudioDeviceModuleHandler for ExternalAdmHandler {
         0
     }
 
-    fn stop_playout(&self) -> i32 {
+    fn stop_playout(&mut self) -> i32 {
         let state = &self.state;
         state.playout.store(false, Ordering::SeqCst);
         if let Some(playback) = state
@@ -349,34 +341,34 @@ impl AudioDeviceModuleHandler for ExternalAdmHandler {
         0
     }
 
-    fn playing(&self) -> bool {
+    fn playing(&mut self) -> bool {
         self.state.playout.load(Ordering::SeqCst)
     }
 
-    fn stereo_playout_is_available(&self, available: &mut bool) -> i32 {
+    fn stereo_playout_is_available(&mut self, available: &mut bool) -> i32 {
         *available = true;
         0
     }
 
-    fn set_stereo_playout(&self, _enable: bool) -> i32 {
+    fn set_stereo_playout(&mut self, _enable: bool) -> i32 {
         0
     }
 
-    fn stereo_playout(&self, enabled: &mut bool) -> i32 {
+    fn stereo_playout(&mut self, enabled: &mut bool) -> i32 {
         *enabled = true;
         0
     }
 
-    fn playout_delay(&self, delay_ms: &mut u16) -> i32 {
+    fn playout_delay(&mut self, delay_ms: &mut u16) -> i32 {
         *delay_ms = 0;
         0
     }
 
-    fn get_playout_underrun_count(&self) -> i32 {
+    fn get_playout_underrun_count(&mut self) -> i32 {
         0
     }
 
-    fn get_playout_audio_parameters(&self, params: &mut Option<AudioParameters>) -> i32 {
+    fn get_playout_audio_parameters(&mut self, params: &mut Option<AudioParameters>) -> i32 {
         // 再生フォーマットは 48kHz / ステレオ / 10ms フレーム固定
         // webrtc の収録フォーマットと一致しており、デバイス側がリサンプリングする
         *params = Some(AudioParameters::new(48000, 2, 480));
@@ -410,60 +402,52 @@ fn create_audio_playback(
         if !playout.load(Ordering::SeqCst) {
             return None;
         }
-        let transport_guard = audio_transport.lock().expect(AUDIO_TRANSPORT_LOCK_POISONED);
-        let transport = transport_guard.as_ref()?;
-
-        let frames_usize = frames as usize;
+        if !(1..=2).contains(&channels) {
+            return None;
+        }
+        let frames_usize = usize::try_from(frames).ok()?;
         let channels_usize = channels as usize;
-        let byte_len = match frames_usize
-            .checked_mul(channels_usize)
-            .and_then(|n| n.checked_mul(2))
-        {
-            Some(n) => n,
-            None => {
-                warn!(target: "adm", frames, channels, "playout invalid buffer size");
-                return None;
-            }
-        };
+        let samples_per_sec = u32::try_from(sample_rate).ok()?;
+        let sample_count = frames_usize.checked_mul(channels_usize)?;
 
-        // S16 固定でデータを受け取る。書き込まれなかった分はゼロ (無音) で埋まる
-        let mut audio_samples = vec![0u8; byte_len];
+        // WebRTC は S16 のポインターとして書き込むため、i16 のアラインメントを確保する。
+        let mut audio_samples = vec![0i16; sample_count];
         let mut n_samples_out = 0usize;
         let mut elapsed_time_ms = 0i64;
         let mut ntp_time_ms = 0i64;
 
-        // SAFETY: audio_samples は byte_len 分の書き込み可能な領域を指しており、
-        // n_samples_out は書き込み可能なポインタである
-        let result = unsafe {
-            transport.need_more_play_data(
-                frames_usize,
-                2,
-                channels_usize,
-                sample_rate as u32,
-                audio_samples.as_mut_ptr(),
-                &mut n_samples_out,
-                &mut elapsed_time_ms,
-                &mut ntp_time_ms,
-            )
+        let result = {
+            let transport_guard = audio_transport.lock().expect(AUDIO_TRANSPORT_LOCK_POISONED);
+            let transport = transport_guard.as_ref()?;
+            // 安全性: 呼び出し中は登録解除と同じロックを保持する。バッファーは
+            // フレーム数 × チャンネル数の i16 として書き込み可能で、他の出力先も
+            // 書き込み可能なローカル変数を指す。バイト数は全チャンネルの 1 フレーム分。
+            unsafe {
+                transport.need_more_play_data(
+                    frames_usize,
+                    size_of::<i16>() * channels_usize,
+                    channels_usize,
+                    samples_per_sec,
+                    audio_samples.as_mut_ptr().cast(),
+                    &mut n_samples_out,
+                    &mut elapsed_time_ms,
+                    &mut ntp_time_ms,
+                )
+            }
         };
         if result != 0 {
             warn!(target: "adm", result, "playout need_more_play_data failed");
             return None;
         }
 
-        // n_samples_out はサンプルごとのフレーム数を表す
-        let frames_out = n_samples_out.min(frames_usize);
-        if frames_out < frames_usize {
-            audio_samples.truncate(frames_out * channels_usize * 2);
-        }
-
-        Some(PlaybackFrame {
-            data: audio_samples,
-            frames: frames_out as i32,
+        // WebRTC が返す n_samples_out は全チャンネル分のサンプル数。完全なフレームだけを返す。
+        let frames_out = n_samples_out.min(sample_count) / channels_usize;
+        PlaybackFrame::from_s16(
+            &audio_samples[..frames_out * channels_usize],
             channels,
             sample_rate,
-            format: AudioFormat::S16,
-        })
+        )
+        .ok()
     };
 
     let config = AudioPlaybackConfig {

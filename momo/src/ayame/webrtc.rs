@@ -386,7 +386,7 @@ fn configure_ice_servers(
     config: &mut PeerConnectionRtcConfiguration,
     no_google_stun: bool,
 ) {
-    let mut servers = config.servers();
+    let mut servers = config.servers_mut();
     if !accept.ice_servers.is_empty() {
         for ice_cfg in &accept.ice_servers {
             let mut server = IceServer::new();

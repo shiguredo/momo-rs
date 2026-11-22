@@ -12,7 +12,7 @@ use shiguredo_v4l2::v4l2_m2m::{
 use shiguredo_webrtc::{
     CodecSpecificInfo, EncodedImage, EncodedImageBuffer, EnvironmentRef, H264PacketizationMode,
     SdpVideoFormat, SdpVideoFormatRef, VideoCodecRef, VideoCodecStatus, VideoEncoder,
-    VideoEncoderEncodedImageCallbackPtr, VideoEncoderEncodedImageCallbackRef,
+    VideoEncoderEncodedImageCallbackPtr, VideoEncoderEncodedImageCallbackRefMut,
     VideoEncoderEncodedImageCallbackResultError, VideoEncoderEncoderInfo, VideoEncoderFactory,
     VideoEncoderFactoryHandler, VideoEncoderHandler, VideoEncoderRateControlParametersRef,
     VideoEncoderSettingsRef, VideoFrameRef, VideoFrameType, VideoFrameTypeVectorRef, i420_copy,
@@ -21,9 +21,8 @@ use tracing::{error, info, warn};
 
 use crate::libcamera::DmaBufMap;
 
-// Mutex が poison された状態はエンコーダーの状態が壊れていることを意味するため、
-// 握りつぶさずパニックさせて異常を明示する
-const SHARED_STATE_LOCK_POISONED: &str = "shared_state lock poisoned";
+// ロックが poison された場合は共有状態を使い続けない。
+const CALLBACK_LOCK_POISONED: &str = "encoder callback lock poisoned";
 const DMABUF_MAP_LOCK_POISONED: &str = "dmabuf_map lock poisoned";
 
 /// V4L2 H.264 エンコーダーファクトリ
@@ -106,19 +105,9 @@ struct EncoderCallbackValue {
     dmabuf_done_tx: Option<std::sync::mpsc::SyncSender<()>>,
 }
 
-/// V4L2 エンコーダーの共有状態
-///
-/// V4L2 のコールバックは別スレッドから呼ばれるため、WebRTC 側のコールバックと
-/// エンコーダー本体は Mutex で保護した共有状態に置く。
-#[derive(Default)]
-struct V4l2EncoderSharedState {
-    encoder: Option<H264Encoder<FnEncodeHandler<EncoderCallbackValue>>>,
-    callback: Option<VideoEncoderEncodedImageCallbackPtr>,
-}
-
 /// V4L2 のコールバックスレッドからエンコード結果を受け取って WebRTC に転送する
 fn handle_v4l2_encode_callback(
-    shared_state: &Arc<Mutex<V4l2EncoderSharedState>>,
+    callback: &Mutex<Option<VideoEncoderEncodedImageCallbackPtr>>,
     result: shiguredo_v4l2::v4l2_m2m::Result<EncodedFrame<EncoderCallbackValue>>,
 ) {
     let encoded = match result {
@@ -158,17 +147,14 @@ fn handle_v4l2_encode_callback(
     codec_info.set_h264_packetization_mode(H264PacketizationMode::NonInterleaved);
     codec_info.set_h264_idr_frame(encoded.is_keyframe());
 
-    let callback = {
-        let guard = shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-        guard.callback
+    let result = {
+        let guard = callback.lock().expect(CALLBACK_LOCK_POISONED);
+        let Some(callback) = guard.as_ref() else {
+            return;
+        };
+        // SAFETY: 登録済みポインタを使い、呼び出しが終わるまで再登録・解除と排他する。
+        unsafe { callback.on_encoded_image(image.as_ref(), Some(codec_info.as_ref())) }
     };
-    let Some(callback) = callback else {
-        return;
-    };
-
-    // SAFETY: callback ポインタは register_encode_complete_callback で渡されたもので、
-    // release が呼ばれるまで有効である。
-    let result = unsafe { callback.on_encoded_image(image.as_ref(), Some(codec_info.as_ref())) };
     if result.error() != VideoEncoderEncodedImageCallbackResultError::Ok {
         warn!(target: "v4l2", "on_encoded_image returned non-Ok status");
     }
@@ -176,7 +162,10 @@ fn handle_v4l2_encode_callback(
 
 /// V4L2 H.264 エンコーダーの内部状態
 struct V4l2H264Encoder {
-    shared_state: Arc<Mutex<V4l2EncoderSharedState>>,
+    encoder: Option<H264Encoder<FnEncodeHandler<EncoderCallbackValue>>>,
+    // V4L2 スレッドの通知完了と WebRTC スレッドの登録解除を同期する。
+    // エンコーダーは共有せず、スレッドの終了を待つ間はこのロックを保持しない。
+    callback: Arc<Mutex<Option<VideoEncoderEncodedImageCallbackPtr>>>,
     width: u32,
     height: u32,
     bitrate_bps: u32,
@@ -186,7 +175,8 @@ struct V4l2H264Encoder {
 impl V4l2H264Encoder {
     fn new(dmabuf_map: Option<DmaBufMap>) -> Self {
         Self {
-            shared_state: Arc::new(Mutex::new(V4l2EncoderSharedState::default())),
+            encoder: None,
+            callback: Arc::new(Mutex::new(None)),
             width: 0,
             height: 0,
             bitrate_bps: 0,
@@ -201,11 +191,11 @@ impl V4l2H264Encoder {
         if self.dmabuf_map.is_some() {
             config.input_memory = Memory::DmaBuf;
         }
-        let shared_state = self.shared_state.clone();
+        let callback = Arc::clone(&self.callback);
         H264Encoder::new(
             config,
             FnEncodeHandler::new(move |result| {
-                handle_v4l2_encode_callback(&shared_state, result);
+                handle_v4l2_encode_callback(&callback, result);
             }),
         )
     }
@@ -231,8 +221,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
 
         match self.build_encoder() {
             Ok(encoder) => {
-                let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-                guard.encoder = Some(encoder);
+                self.encoder = Some(encoder);
                 info!(target: "v4l2", "V4L2 H.264 encoder initialized");
                 VideoCodecStatus::Ok
             }
@@ -276,8 +265,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
                 height: self.height,
                 dmabuf_done_tx: Some(done_tx),
             };
-            let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-            let Some(encoder) = guard.encoder.as_mut() else {
+            let Some(encoder) = self.encoder.as_mut() else {
                 return VideoCodecStatus::Uninitialized;
             };
             return match encoder.encode(
@@ -349,8 +337,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
             height: self.height,
             dmabuf_done_tx: None,
         };
-        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-        let Some(encoder) = guard.encoder.as_mut() else {
+        let Some(encoder) = self.encoder.as_mut() else {
             return VideoCodecStatus::Uninitialized;
         };
         match encoder.encode(
@@ -370,18 +357,17 @@ impl VideoEncoderHandler for V4l2H264Encoder {
 
     fn register_encode_complete_callback(
         &mut self,
-        callback: Option<VideoEncoderEncodedImageCallbackRef<'_>>,
+        callback: Option<VideoEncoderEncodedImageCallbackRefMut<'_>>,
     ) -> VideoCodecStatus {
-        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-        guard.callback =
-            callback.map(|cb| unsafe { VideoEncoderEncodedImageCallbackPtr::from_ref(cb) });
+        let mut guard = self.callback.lock().expect(CALLBACK_LOCK_POISONED);
+        // SAFETY: WebRTC は登録中のコールバックを有効に保つ。通知と同じロックで再登録・解除を行う。
+        *guard = callback.map(|cb| unsafe { VideoEncoderEncodedImageCallbackPtr::from_mut(&cb) });
         VideoCodecStatus::Ok
     }
 
     fn release(&mut self) -> VideoCodecStatus {
-        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-        guard.encoder = None;
-        guard.callback = None;
+        *self.callback.lock().expect(CALLBACK_LOCK_POISONED) = None;
+        self.encoder = None;
         info!(target: "v4l2", "V4L2 H.264 encoder released");
         VideoCodecStatus::Ok
     }
@@ -389,8 +375,7 @@ impl VideoEncoderHandler for V4l2H264Encoder {
     fn set_rates(&mut self, parameters: VideoEncoderRateControlParametersRef<'_>) {
         let bitrate_bps = parameters.target_bitrate_sum_bps();
         self.bitrate_bps = bitrate_bps;
-        let mut guard = self.shared_state.lock().expect(SHARED_STATE_LOCK_POISONED);
-        if let Some(ref mut encoder) = guard.encoder
+        if let Some(encoder) = self.encoder.as_mut()
             && let Err(e) = encoder.set_bitrate(bitrate_bps)
         {
             warn!(target: "v4l2", error = %e, "set_bitrate failed");
