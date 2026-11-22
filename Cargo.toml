@@ -31,7 +31,7 @@ shiguredo_openh264 = "2026.2"
 # syn 3 と prettyplease 0.2 の組み合わせになりビルドできない。Cargo.lock では bindgen 0.73.0 に固定する
 shiguredo_opus = "2026.4"
 # 映像入力デバイス (VideoCapture)
-shiguredo_video_device = "2026.3"
+shiguredo_video_device = "2026.4"
 # WebRTC 本体 (PeerConnection / トラック / RTP コーデック等)
 # sora_sdk 2026.2.0-canary.3 が shiguredo_webrtc ~0.152.1-canary.2 を要求するため、
 # 安定版 0.152.0 では解決不能になる。sora_sdk が 0.152.0 以上を許容する版を出すまでプレリリースに固定する
@@ -59,7 +59,7 @@ noargs = "0.4"
 nojson = "0.3"
 
 # 暗号ライブラリ (乱数生成と rustls の暗号プロバイダで利用)
-aws-lc-rs = "1.18"
+aws-lc-rs = "1.19"
 # TLS 実装 (Ayame の wss 接続 / momo-moq の QUIC 接続)
 rustls = {
   version = "0.23",
@@ -71,12 +71,12 @@ rustls = {
   ]
 }
 # PEM など PKI 関連の型定義 (Ayame シグナリング / momo-moq の QUIC 接続)
-rustls-pki-types = { version = "1.15", features = ["std"] }
+rustls-pki-types = { version = "1.16", features = ["std"] }
 # OS の証明書ストアを使ったサーバー証明書検証 (Ayame シグナリング / momo-moq の QUIC 接続)
 rustls-platform-verifier = "0.7"
 # 非同期ランタイム
 tokio = {
-  version = "1.53",
+  version = "1.54",
   features = [
     "fs",
     "io-util",
