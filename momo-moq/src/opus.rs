@@ -1,7 +1,7 @@
 //! Opus のエンコード・デコードと OpusHead の取り扱い
 //!
 //! 音声は Opus を使い、Audio Config (0x0F) に OpusHead (RFC 7845 §5.1) を載せる。
-//! LOC は draft-ietf-moq-loc-05、MSF は draft-ietf-moq-msf-01 に基づく。draft 由来のため
+//! LOC は draft-ietf-moq-loc-05、MSF は draft-ietf-moq-msf-02 に基づく。draft 由来のため
 //! 将来の改版で変わる可能性がある。
 
 use shiguredo_opus::{Application, Decoder, DecoderConfig, Encoder, EncoderConfig, FrameDuration};

@@ -481,11 +481,8 @@ impl Publisher {
         } else {
             None
         };
-        let bytes = catalog::encode_catalog(
-            &self.config.namespace,
-            video_spec.as_ref(),
-            audio_spec.as_ref(),
-        )?;
+        let bytes =
+            catalog::encode_catalog(&self.namespace, video_spec.as_ref(), audio_spec.as_ref())?;
 
         let request_id = self
             .client

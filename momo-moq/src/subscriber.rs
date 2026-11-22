@@ -20,7 +20,7 @@ use shiguredo_moqt::message_parameter::{
     LocationFilter, MessageParameter, MessageParameterValue, MessageParameters,
     PARAM_LOCATION_FILTER,
 };
-use shiguredo_moqt::msf::MsfCatalog;
+use shiguredo_moqt::msf::{MsfCatalog, MsfCatalogDocument};
 use shiguredo_moqt::parameter::DEFAULT_MAX_CONTROL_MESSAGE_SIZE;
 use shiguredo_moqt::session::types::{DataStreamId, SessionEvent, TrackDataAcceptance};
 use shiguredo_moqt::stream::decoder::{
@@ -166,17 +166,18 @@ pub async fn run(
             parameters,
         )
         .await?;
-    let msf_catalog = receive_catalog(&acceptor, &data_plane, fetch_result.request_id).await?;
+    let msf_catalog =
+        receive_catalog(&acceptor, &data_plane, fetch_result.request_id, &namespace).await?;
 
     // カタログから映像と音声のトラックを見つける (識別は codec の接頭辞で行う)
-    let video_info = match catalog::find_video_track(&msf_catalog) {
+    let video_info = match catalog::find_video_track(&msf_catalog, &namespace) {
         Ok(info) => Some(info),
         Err(e) => {
             info!(target: "moq", "catalog has no usable video track: {e}");
             None
         }
     };
-    let audio_info = match catalog::find_audio_track(&msf_catalog) {
+    let audio_info = match catalog::find_audio_track(&msf_catalog, &namespace) {
         Ok(info) => Some(info),
         Err(e) => {
             info!(target: "moq", "catalog has no usable audio track: {e}");
@@ -205,7 +206,7 @@ pub async fn run(
     let mut video_request_id = None;
     if let Some(ref video) = video_info {
         let result = client
-            .subscribe_track(namespace.clone(), video.track_name.clone())
+            .subscribe_track(video.namespace.clone(), video.track_name.clone())
             .await?;
         info!(
             target: "moq",
@@ -222,7 +223,7 @@ pub async fn run(
     let mut opus_decoder = None;
     if let Some(ref audio) = audio_info {
         let result = client
-            .subscribe_track(namespace.clone(), audio.track_name.clone())
+            .subscribe_track(audio.namespace.clone(), audio.track_name.clone())
             .await?;
         info!(
             target: "moq",
@@ -345,6 +346,7 @@ async fn receive_catalog(
     acceptor: &StreamAcceptor,
     data_plane: &DataPlaneHandle,
     expected_request_id: u64,
+    catalog_namespace: &TrackNamespace,
 ) -> Result<MsfCatalog, BoxError> {
     loop {
         let mut stream = acceptor.accept_recv_stream().await?.ok_or_else(|| {
@@ -361,6 +363,7 @@ async fn receive_catalog(
                     data_plane,
                     stream_id,
                     expected_request_id,
+                    catalog_namespace,
                 )
                 .await;
             }
@@ -385,6 +388,7 @@ async fn decode_catalog_stream(
     data_plane: &DataPlaneHandle,
     stream_id: DataStreamId,
     expected_request_id: u64,
+    catalog_namespace: &TrackNamespace,
 ) -> Result<MsfCatalog, BoxError> {
     let mut decoder = FetchStreamDecoder::new();
     decoder.push(&buf);
@@ -435,16 +439,11 @@ async fn decode_catalog_stream(
                 },
             }
         };
-        data_plane.recv_fetch_entry(stream_id, &entry)?;
-        let payload_length = match &entry {
-            shiguredo_moqt::stream::decoder::DecodedFetchEntry::Object(object) => {
-                object.payload_length
-            }
-            _ => 0,
-        };
-        if payload_length == 0 {
+        let Some(compression) =
+            data_plane.recv_catalog_fetch_entry(stream_id, expected_request_id, &entry)?
+        else {
             continue;
-        }
+        };
         let payload = loop {
             if let Some(payload) = decoder.try_read_payload() {
                 break payload;
@@ -459,18 +458,21 @@ async fn decode_catalog_stream(
                 }
             }
         };
-        let document = catalog::decode_catalog(&payload)?;
+        let document = catalog::decode_catalog(&payload, compression)?;
         match document {
-            shiguredo_moqt::msf::MsfCatalogDocument::Full(full) => {
+            MsfCatalogDocument::Full(full) => {
+                full.validate_track_names(Some(catalog_namespace))
+                    .map_err(|e| MoqError::Catalog(format!("invalid catalog track names: {e}")))?;
                 catalog = Some(full);
             }
-            shiguredo_moqt::msf::MsfCatalogDocument::Delta(delta) => {
+            MsfCatalogDocument::Delta(delta) => {
                 let base = catalog.as_mut().ok_or_else(|| {
                     MoqError::Catalog("received a delta catalog before the full catalog".to_owned())
                 })?;
-                base.apply_delta(&delta, None).map_err(|e| {
-                    MoqError::Catalog(format!("failed to apply delta catalog: {e}"))
-                })?;
+                base.apply_delta(&delta, Some(catalog_namespace))
+                    .map_err(|e| {
+                        MoqError::Catalog(format!("failed to apply delta catalog: {e}"))
+                    })?;
             }
         }
     }

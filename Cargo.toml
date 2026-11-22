@@ -23,7 +23,7 @@ shiguredo_audio_device = "2026.3"
 shiguredo_http11 = "2026.6"
 # MOQT 本体 (momo-moq)
 # 開発中で crates.io 未公開のため、git のリビジョンを固定して参照する
-shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "01800ce6e630895e1a7147aa771ff6dbc00a6f46" }
+shiguredo_moqt = { git = "https://github.com/shiguredo/moqt-rs", rev = "e25dae7a2fa8c164bb2264176aeaf71bfd142ac0" }
 # OpenH264 エンコーダー・デコーダー
 shiguredo_openh264 = "2026.2"
 # Opus エンコーダー・デコーダー

@@ -16,6 +16,8 @@ use shiguredo_moqt::message::{ControlMessage, ErrorDetails, ReasonPhrase};
 use shiguredo_moqt::message_parameter::{
     MessageParameter, MessageParameterValue, MessageParameters, PARAM_SUBSCRIBER_PRIORITY,
 };
+use shiguredo_moqt::msf::MsfCompression;
+use shiguredo_moqt::object_properties::ObjectProperties;
 use shiguredo_moqt::parameter::DEFAULT_MAX_CONTROL_MESSAGE_SIZE;
 use shiguredo_moqt::session::core::Session;
 use shiguredo_moqt::session::types::{
@@ -353,16 +355,43 @@ impl DataPlaneHandle {
         }
     }
 
-    /// fetch entry を Session に通知する (subscriber 側)
-    pub fn recv_fetch_entry(
+    /// カタログの FETCH entry を Session に通知し、ペイロードがあれば圧縮方式を返す
+    pub fn recv_catalog_fetch_entry(
         &self,
         stream_id: DataStreamId,
+        request_id: u64,
         entry: &DecodedFetchEntry,
-    ) -> Result<(), BoxError> {
+    ) -> Result<Option<MsfCompression>, BoxError> {
         let mut session = lock_session(&self.session);
         session
             .recv_fetch_entry(stream_id, entry)
-            .map_err(|e| MoqError::Session(format!("recv_fetch_entry: {e}")).into())
+            .map_err(|e| MoqError::Session(format!("recv_fetch_entry: {e}")))?;
+        let DecodedFetchEntry::Object(object) = entry else {
+            return Ok(None);
+        };
+        if object.payload_length == 0 {
+            return Ok(None);
+        }
+
+        // draft-ietf-moq-msf-02 §12.1 に従い、FETCH_OK と Object の圧縮信号を解決する。
+        // Object Properties のフレーミングは上の recv_fetch_entry で検証済み。
+        let properties = match object.properties_bytes.as_deref() {
+            Some(bytes) => {
+                ObjectProperties::decode(bytes)
+                    .map_err(|e| {
+                        MoqError::Catalog(format!("invalid catalog object properties: {e}"))
+                    })?
+                    .0
+            }
+            None => ObjectProperties::new(),
+        };
+        let fetch = session
+            .fetch(request_id)
+            .ok_or_else(|| MoqError::Session(format!("catalog FETCH disappeared: {request_id}")))?;
+        let compression = fetch
+            .msf_compression_for_object(&properties)
+            .map_err(|e| MoqError::Catalog(format!("invalid catalog compression signal: {e}")))?;
+        Ok(Some(compression))
     }
 
     /// uni data stream の close を Session に通知する (subscriber 側)
